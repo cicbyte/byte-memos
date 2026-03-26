@@ -1,0 +1,35 @@
+[package]
+name = "byte-memos-core"
+description = "byte-memos 核心库：笔记 CRUD、标签管理、附件存储、FTS5 搜索、MCP 工具实现（CLI/Desktop 共享）"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[features]
+# MCP 服务器（CLI 和桌面端按需启用）
+mcp = ["dep:rmcp", "dep:schemars", "dep:axum", "dep:tokio", "dep:tokio-util"]
+
+[dependencies]
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+rusqlite.workspace = true
+rand = "0.9"
+walkdir = "2"
+chrono = { version = "0.4", features = ["serde"] }
+zip = "2"
+toml = "0.8"
+regex = "1"
+
+# favicon 抓取（F11：best-effort 缓存站点图标；rustls-tls 无系统 OpenSSL 依赖，Windows 友好）
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+
+# MCP（feature gate，启用 mcp feature 时才编译）
+rmcp = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+axum = { version = "0.8", features = ["macros"], optional = true }
+tokio = { workspace = true, optional = true }
+tokio-util = { version = "0.7", optional = true }

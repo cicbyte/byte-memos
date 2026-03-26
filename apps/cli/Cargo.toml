@@ -1,0 +1,22 @@
+[package]
+name = "bm"
+description = "byte-memos CLI：本地笔记管理 + MCP/REST 集成入口"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bm"
+path = "src/main.rs"
+
+[dependencies]
+byte-memos-core = { path = "../../crates/core", features = ["mcp"] }
+anyhow.workspace = true
+clap = { version = "4", features = ["derive", "color"] }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util = "0.7"
+tracing.workspace = true
+tracing-subscriber.workspace = true
