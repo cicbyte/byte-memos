@@ -1,59 +1,63 @@
-/** 前端类型定义（byte-link 书签应用） */
+/** 前端类型定义（byte-memos 备忘录应用）——与 crates/core/src/model 逐字段对齐 */
 
 export interface StatsOverview {
-  bookmark_count: number;
+  memo_count: number;
   tag_count: number;
   category_count: number;
-  favorited_count: number;
-  trashed_count: number;
+  /** 数据目录磁盘占用（字节） */
   total_size: number;
+  pinned_count: number;
+  trashed_count: number;
 }
 
-// ============ 书签（byte-link 核心领域）============
+// ============ 备忘录（byte-memos 核心领域）============
 
-export interface Bookmark {
+export interface Memo {
   short_id: string;
   title: string;
-  /** 书签地址（活跃行内唯一） */
-  url: string;
-  description: string;
+  /** Markdown 内容 */
+  content: string;
+  /** 可见性：PRIVATE / PROTECTED / PUBLIC */
+  visibility: "PRIVATE" | "PROTECTED" | "PUBLIC" | string;
+  /** 是否置顶 */
+  pinned: boolean;
   category_id: number | null;
+  /** 分类名（关联查询时填充） */
   category: string | null;
-  /** 本地缓存 favicon 文件相对路径（空串=未缓存） */
-  favicon_path: string;
-  visit_count: number;
-  /** 是否归档（不常用但保留，区别于回收站） */
-  is_archived: boolean;
-  is_favorited: boolean;
+  tags: string[];
   created_at: string;
   updated_at: string;
-  tags: string[];
+  deleted_at: string | null;
 }
 
-export interface BookmarkSearchHit {
+/** 备忘录版本快照（内容变更自动记录，历史只增不减） */
+export interface MemoVersionInfo {
+  id: number;
+  memo_short_id: string;
+  memo_title: string;
+  content: string;
+  created_at: string;
+}
+
+export interface MemoSearchHit {
   short_id: string;
   title: string;
-  url: string;
-  snippet: string;
-  rank: number;
+  /** 内容片段（FTS 高亮） */
+  snippet: string | null;
+  category: string | null;
+  tags: string[];
+  rank: number | null;
 }
 
 export interface Category {
   id: number;
   name: string;
-  bookmark_count: number;
+  /** 分类主题色（hex，null=未设置） */
+  color: string | null;
+  memo_count: number;
 }
 
-/** 兜底搜索命中（LIKE 兜底时使用） */
-export interface SearchHit {
-  short_id: string;
-  title: string;
-  snippet: string;
-  rank: number;
-  matched_tags: string[];
-}
-
-/** 统一搜索命中（search_all 返回，item_type 恒为 bookmark） */
+/** 统一搜索命中（search_all 返回，item_type 恒为 memo） */
 export interface UnifiedSearchHit {
   short_id: string;
   item_type: ItemType;
@@ -70,10 +74,12 @@ export interface TagStat {
   count: number;
 }
 
-export interface ListParams {
+/** 备忘录列表过滤参数（对齐 core MemoFilter） */
+export interface MemoListParams {
   tag?: string;
   category?: string;
-  favorited_only?: boolean;
+  /** 仅置顶 */
+  pinned_only?: boolean;
   limit?: number;
   offset?: number;
 }
@@ -86,7 +92,7 @@ export interface PagedResult<T> {
 
 // ============ 回收站 ============
 
-export type ItemType = "bookmark";
+export type ItemType = "memo";
 
 export interface TrashedItem {
   short_id: string;

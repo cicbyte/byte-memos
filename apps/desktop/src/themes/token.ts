@@ -10,7 +10,14 @@
  */
 import { theme as antdTheme } from "ant-design-vue";
 import type { ThemeColors, Appearance, RegionOverrides, RegionOverrideKey } from "./types";
-import { EXT_CSS_VARS, REGION_DEFS, defaultRegions } from "./presets";
+import { EXT_CSS_VARS, REGION_DEFS, defaultRegions, hexToRgb } from "./presets";
+
+/** 主色亮度判定（相对亮度 > 0.6 视为亮主色，主题色底 CTA 上改用墨字） */
+function isLightPrimary(hex: string): boolean {
+  const [r, g, b] = hexToRgb(hex);
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return lum > 0.6;
+}
 
 /** 基础 bg → -orig（供 :root color-mix 半透明派生） */
 const BASE_BG: Record<string, string> = {
@@ -51,6 +58,14 @@ export function applyColorsToDOM(
     root.style.setProperty(EXT_CSS_VARS[key], colors[key as keyof ThemeColors] ?? "");
   }
   root.style.setProperty("--accent", colors.primary);
+  // 主题色 RGB 三元组（"r, g, b"）：供 rgba(var(--color-primary-rgb), α) 透明度梯度使用
+  const [pr, pg, pb] = hexToRgb(colors.primary);
+  root.style.setProperty("--color-primary-rgb", `${pr}, ${pg}, ${pb}`);
+  // hero CTA：主题色底上的文字色（亮主色如纸墨暗色的纸白需墨字）
+  root.style.setProperty(
+    "--hero-cta-text",
+    isLightPrimary(colors.primary) ? "#1b1c1f" : "#ffffff",
+  );
 
   // 区域语义层：bg → -orig（用户覆盖值 ?? 默认派生，统一走半透明）；文字 → 直接（覆盖 set / 未覆盖 remove）
   const defs = defaultRegions(colors);
@@ -64,6 +79,14 @@ export function applyColorsToDOM(
     });
   });
 
+  // hero 暗色覆盖（derivation.css 只有浅色兜底，暗色由 JS 注入）：
+  // 渐变随主题色板（bgBase→bgElevated，纸墨暗色即炭色系）；
+  // 纸白主色下白晕过亮 → 暗色移除光斑
+  if (appearance === "dark") {
+    root.style.setProperty("--hero-from", colors.bgBase);
+    root.style.setProperty("--hero-to", colors.bgElevated);
+    root.style.setProperty("--hero-glow-alpha", "0");
+  }
   root.setAttribute("data-theme", appearance);
 }
 

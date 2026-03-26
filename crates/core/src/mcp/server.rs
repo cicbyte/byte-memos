@@ -76,15 +76,15 @@ pub struct DeleteInput {
 
 /// MCP 服务器：每个会话持有一个 ToolCtx
 #[derive(Clone)]
-pub struct ByteLinkMcpServer {
+pub struct ByteMemosMcpServer {
     ctx: Arc<ToolCtx>,
     // tool_router 字段由 #[tool_handler] 宏在生成的 ServerHandler 实现里读取，
     // 编译器静态分析看不到该引用，故显式抑制 dead_code。
     #[allow(dead_code)]
-    tool_router: ToolRouter<ByteLinkMcpServer>,
+    tool_router: ToolRouter<ByteMemosMcpServer>,
 }
 
-impl ByteLinkMcpServer {
+impl ByteMemosMcpServer {
     pub fn new() -> Result<Self> {
         Ok(Self {
             ctx: Arc::new(ToolCtx::new()?),
@@ -94,7 +94,7 @@ impl ByteLinkMcpServer {
 }
 
 #[tool_router]
-impl ByteLinkMcpServer {
+impl ByteMemosMcpServer {
     /// 搜索备忘录（统一入口）
     #[tool(description = "搜索备忘录。type: memo/all（默认 all 跨类型合并，支持中文）。\
                           返回命中列表（标题 + ID）。limit/offset 分页。")]
@@ -144,7 +144,7 @@ impl ByteLinkMcpServer {
 
 /// ServerHandler：声明能力并挂上工具路由
 #[tool_handler]
-impl ServerHandler for ByteLinkMcpServer {
+impl ServerHandler for ByteMemosMcpServer {
     fn get_info(&self) -> ServerInfo {
         ServerInfo::new(
             ServerCapabilities::builder()
@@ -173,7 +173,7 @@ fn text_result(text: String) -> CallToolResult {
 
 /// stdio 模式
 pub async fn serve_stdio() -> Result<()> {
-    let server = ByteLinkMcpServer::new()?;
+    let server = ByteMemosMcpServer::new()?;
     tracing::info!("MCP stdio server starting");
     let service = server
         .serve(rmcp::transport::stdio())
@@ -211,7 +211,7 @@ pub fn serve_http_managed(
 
     let service = StreamableHttpService::new(
         || {
-            ByteLinkMcpServer::new()
+            ByteMemosMcpServer::new()
                 .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
         },
         LocalSessionManager::default().into(),

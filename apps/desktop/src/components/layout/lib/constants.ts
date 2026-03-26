@@ -5,15 +5,14 @@
  */
 import {
   DashboardOutlined,
-  AppstoreOutlined,
   TagsOutlined,
-  StarOutlined,
+  PushpinOutlined,
   SettingOutlined,
   FolderOutlined,
   DeleteOutlined,
   CloudServerOutlined,
   GlobalOutlined,
-  LinkOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons-vue";
 
 export type IconComp = typeof DashboardOutlined;
@@ -24,7 +23,6 @@ export interface MenuItem {
 export interface MenuGroup {
   key: string;
   label: string;
-  icon: IconComp;
   children: MenuItem[];
 }
 
@@ -35,28 +33,25 @@ export const topItems: MenuItem[] = [
 
 export const menuGroups: MenuGroup[] = [
   {
+    key: "browse",
+    label: "内容",
+    children: [
+      { key: "/memos", icon: FileTextOutlined },
+      { key: "/favorites", icon: PushpinOutlined },
+      { key: "/trash", icon: DeleteOutlined },
+    ],
+  },
+  {
     key: "metadata",
     label: "元数据",
-    icon: TagsOutlined,
     children: [
       { key: "/categories", icon: FolderOutlined },
       { key: "/tags", icon: TagsOutlined },
     ],
   },
   {
-    key: "browse",
-    label: "内容",
-    icon: AppstoreOutlined,
-    children: [
-      { key: "/bookmarks", icon: LinkOutlined },
-      { key: "/favorites", icon: StarOutlined },
-      { key: "/trash", icon: DeleteOutlined },
-    ],
-  },
-  {
     key: "services",
     label: "服务",
-    icon: CloudServerOutlined,
     children: [
       { key: "/mcp-service", icon: GlobalOutlined },
       { key: "/api-service", icon: CloudServerOutlined },
@@ -65,26 +60,18 @@ export const menuGroups: MenuGroup[] = [
   {
     key: "system",
     label: "系统",
-    icon: SettingOutlined,
     children: [{ key: "/settings", icon: SettingOutlined }],
   },
 ];
 
 export const labelOf: Record<string, string> = {
   "/": "仪表盘",
-  "/bookmarks": "书签",
+  "/memos": "备忘录",
   "/tags": "标签",
   "/categories": "分类",
-  "/favorites": "收藏",
+  "/favorites": "置顶",
   "/trash": "回收站",
   "/mcp-service": "MCP 服务",
   "/api-service": "REST API",
   "/settings": "设置",
 };
-
-export function groupOf(path: string): string | null {
-  for (const g of menuGroups) {
-    if (g.children.some((c) => c.key === path)) return g.key;
-  }
-  return null;
-}

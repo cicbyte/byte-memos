@@ -340,7 +340,7 @@ impl Database {
 fn memo_where(filter: &MemoFilter) -> (Vec<String>, Vec<Box<dyn rusqlite::ToSql>>) {
     let mut clauses = vec!["deleted_at IS NULL".to_string()];
     let mut params: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
-    if filter.favorited_only {
+    if filter.pinned_only {
         clauses.push("pinned = 1".into());
     }
     if let Some(t) = &filter.tag {

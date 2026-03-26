@@ -8,10 +8,10 @@ const routes = [
     meta: { title: "仪表盘", fullsize: true },
   },
   {
-    path: "/bookmarks",
-    name: "bookmarks",
-    component: () => import("@/views/bookmarks/index.vue"),
-    meta: { title: "书签", group: "内容", fullsize: true },
+    path: "/memos",
+    name: "memos",
+    component: () => import("@/views/memos/index.vue"),
+    meta: { title: "备忘录", group: "内容", fullsize: true },
   },
   {
     path: "/tags",

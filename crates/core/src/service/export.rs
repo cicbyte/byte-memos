@@ -75,7 +75,7 @@ impl super::ProjectService {
 fn markdown_to_html(md: &str) -> String {
     let mut html = String::new();
     let mut in_code_block = false;
-    let mut code_lang = String::new();
+    let mut code_lang;
 
     for line in md.lines() {
         if line.starts_with("```") {
@@ -143,7 +143,7 @@ fn html_escape(s: &str) -> String {
 }
 
 fn replace_pattern(s: &str, marker: &str, open: &str, close: &str) -> String {
-    let mut parts: Vec<&str> = s.split(marker).collect();
+    let parts: Vec<&str> = s.split(marker).collect();
     if parts.len() >= 3 {
         let mut result = String::new();
         for i in 0..parts.len() {

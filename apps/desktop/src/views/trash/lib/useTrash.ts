@@ -1,9 +1,9 @@
 /**
- * 回收站页逻辑（书签专用）
+ * 回收站页逻辑（备忘录）
  *
- * 展示已软删除的书签，支持：
- * - 恢复（restoreBookmark → 清 deleted_at 标记 + 重建 FTS）
- * - 彻底删除（purgeBookmark → 物理删除 DB 行 + 关联，不可恢复）
+ * 展示已软删除的备忘录，支持：
+ * - 恢复（restoreMemo → 清 deleted_at 标记 + 重建 FTS）
+ * - 彻底删除（purgeMemo → 物理删除 DB 行 + 关联，不可恢复）
  * - 清空回收站（emptyTrash → 对所有条目执行 purge）
  */
 import { ref, computed, onMounted } from "vue";
@@ -17,7 +17,7 @@ export function useTrash() {
   const items = ref<TrashedItem[]>([]);
   const loading = ref(false);
 
-  /** 按筛选条件过滤后的列表（书签回收站仅书签一类，直接返回全部） */
+  /** 按筛选条件过滤后的列表（备忘录回收站仅备忘录一类，直接返回全部） */
   const filtered = computed(() => items.value);
 
   function updateFooter() {
@@ -42,7 +42,7 @@ export function useTrash() {
   /** 恢复单个条目 */
   async function restore(it: TrashedItem) {
     try {
-      await api.restoreBookmark(it.short_id);
+      await api.restoreMemo(it.short_id);
       message.success("已恢复");
       items.value = items.value.filter((x) => x.short_id !== it.short_id);
       updateFooter();
@@ -61,7 +61,7 @@ export function useTrash() {
       cancelText: "取消",
       onOk: async () => {
         try {
-          await api.purgeBookmark(it.short_id);
+          await api.purgeMemo(it.short_id);
           message.success("已彻底删除");
           items.value = items.value.filter((x) => x.short_id !== it.short_id);
           updateFooter();

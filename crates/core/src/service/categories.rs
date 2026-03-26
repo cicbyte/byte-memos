@@ -21,6 +21,11 @@ impl super::ProjectService {
         self.db.delete_category(id)
     }
 
+    /// 设置分类主题色（None 清除；色值为 hex 字符串）
+    pub fn set_category_color(&self, id: i64, color: Option<&str>) -> CoreResult<()> {
+        self.db.set_category_color(id, color)
+    }
+
     // ============ 标签管理 ============
 
     /// 列出所有标签（树形结构）

@@ -20,7 +20,7 @@ const {
   categories,
   selectedId,
   loading,
-  previewBookmarks,
+  previewMemos,
   detailTab,
   newName,
   creating,
@@ -36,8 +36,9 @@ const {
   startEdit,
   commitEdit,
   cancelEdit,
+  setColor,
   onRemove,
-  goBookmarks,
+  goMemos,
   handleEsc,
 } = useCategories();
 
@@ -66,6 +67,7 @@ onUnmounted(() => window.removeEventListener("keydown", handleEsc));
       @start-edit="startEdit"
       @commit-edit="commitEdit"
       @cancel-edit="cancelEdit"
+      @set-color="setColor"
       @remove="onRemove"
     />
 
@@ -74,11 +76,11 @@ onUnmounted(() => window.removeEventListener("keydown", handleEsc));
       :categories="categories"
       :selected="selected"
       :tabs="tabs"
-      :preview-bookmarks="previewBookmarks"
+      :preview-memos="previewMemos"
       v-model:detail-tab="detailTab"
       @start-edit="startEdit"
       @remove="onRemove"
-      @go-bookmarks="goBookmarks"
+      @go-memos="goMemos"
     />
   </div>
 </template>

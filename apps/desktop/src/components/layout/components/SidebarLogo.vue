@@ -13,7 +13,7 @@ defineEmits<{ (e: "home"): void }>();
   <div class="sidebar-logo">
     <div class="logo-brand" @click="$emit('home')">
       <Logo :size="26" class="logo-img" />
-      <span v-if="!collapsed" class="logo-text">byte-link</span>
+      <span v-if="!collapsed" class="logo-text">byte-memos</span>
     </div>
   </div>
 </template>

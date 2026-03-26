@@ -31,6 +31,7 @@ mod trash;
 use config_backup::{ensure_config, migrate_to_data_layout, read_config, write_config};
 // CLI restore 直接调用（crate::service::restore_files）
 pub use config_backup::restore_files;
+pub use versions::MemoVersionInfo;
 
 /// shortId 碰撞重试上限
 const SHORT_ID_MAX_RETRIES: usize = 10;

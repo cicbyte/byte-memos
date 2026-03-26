@@ -11,4 +11,8 @@ export const categoriesApi = {
     invoke<void>("rename_category", { id, name }),
 
   deleteCategory: (id: number) => invoke<void>("delete_category", { id }),
+
+  /** 设置分类主题色（null 清除） */
+  setCategoryColor: (id: number, color: string | null) =>
+    invoke<void>("set_category_color", { id, color }),
 };

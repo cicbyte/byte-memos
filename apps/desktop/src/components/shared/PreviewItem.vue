@@ -14,13 +14,13 @@ import type { Component } from "vue";
 withDefaults(
   defineProps<{
     icon?: Component;
-    variant?: "bookmark";
+    variant?: "memo";
     title: string;
     meta?: string;
     lang?: string;
     desc?: string;
   }>(),
-  { variant: "bookmark" },
+  { variant: "memo" },
 );
 defineEmits<{ (e: "click"): void }>();
 </script>
@@ -54,7 +54,7 @@ defineEmits<{ (e: "click"): void }>();
   font-size: 14px;
   flex-shrink: 0;
 }
-.preview-icon.bookmark {
+.preview-icon.memo {
   color: var(--color-primary);
 }
 .preview-title {

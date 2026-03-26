@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * 回收站页 /trash（书签专用）
+ * 回收站页 /trash（备忘录）
  *
- * 展示已软删除的书签，支持恢复与彻底删除。
+ * 展示已软删除的备忘录，支持恢复与彻底删除。
  * 逻辑见 useTrash.ts，样式见 trash.css。
  */
 import {
   DeleteOutlined,
-  LinkOutlined,
+  FileTextOutlined,
   UndoOutlined,
   ReloadOutlined,
 } from "@ant-design/icons-vue";
@@ -46,17 +46,17 @@ function fmtDate(iso: string): string {
     <!-- 列表面板 -->
     <section class="panel">
       <header class="panel-head">
-        <span class="head-title">已删除书签</span>
+        <span class="head-title">已删除备忘录</span>
         <span class="trash-count">{{ filtered.length }}</span>
       </header>
 
       <div class="panel-body" style="position:relative">
           <div v-for="it in filtered" :key="it.short_id" class="trash-item">
-            <LinkOutlined class="item-type-icon bookmark" />
+            <FileTextOutlined class="item-type-icon memo" />
             <div class="item-main">
               <div class="item-title">{{ it.title || '(无标题)' }}</div>
               <div class="item-sub">
-                <span class="type-tag">书签</span>
+                <span class="type-tag">备忘录</span>
                 <span v-if="it.category" class="sep">·</span>
                 <span v-if="it.category">{{ it.category }}</span>
                 <span class="sep">·</span>

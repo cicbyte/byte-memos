@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * 分类详情概览（categories → 右 Panel，书签专用）
+ * 分类详情概览（categories → 右 Panel，备忘录）
  *
  * 可变状态（detailTab）通过 defineModel 与主入口双向绑定，
  * 状态唯一来源仍在主入口的 useCategories；本组件不持有同名状态副本。
@@ -12,20 +12,20 @@ import {
   EditOutlined,
   DeleteOutlined,
   FolderOutlined,
-  LinkOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons-vue";
 import EmptyState from "@/components/common/EmptyState.vue";
 import Panel from "@/components/shared/Panel.vue";
 import DetailTabs from "@/components/shared/DetailTabs.vue";
 import StatCard from "@/components/shared/StatCard.vue";
 import PreviewItem from "@/components/shared/PreviewItem.vue";
-import type { Category, Bookmark } from "@/api/types";
+import type { Category, Memo } from "@/api/types";
 
 defineProps<{
   categories: Category[];
   selected: Category | null;
   tabs: { key: string; label: string; count?: number }[];
-  previewBookmarks: Bookmark[];
+  previewMemos: Memo[];
 }>();
 
 const detailTab = defineModel<string>("detailTab", { required: true });
@@ -33,10 +33,21 @@ const detailTab = defineModel<string>("detailTab", { required: true });
 const emit = defineEmits<{
   startEdit: [c: Category];
   remove: [c: Category];
-  goBookmarks: [];
+  goMemos: [];
 }>();
 
 const router = useRouter();
+
+/** Markdown → 纯文本摘要 */
+function excerpt(m: Memo, max = 80): string {
+  const text = m.content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_~`\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
 </script>
 
 <template>
@@ -62,22 +73,22 @@ const router = useRouter();
         <div v-if="detailTab === 'overview'" class="overview-body">
           <div class="stat-grid">
             <StatCard
-              :icon="LinkOutlined" variant="bookmark"
-              :value="selected.bookmark_count" label="书签" go
-              @click="emit('goBookmarks')"
+              :icon="FileTextOutlined" variant="memo"
+              :value="selected.memo_count" label="备忘录" go
+              @click="emit('goMemos')"
             />
           </div>
         </div>
 
-        <!-- 书签 tab -->
-        <div v-else-if="detailTab === 'bookmarks'" class="tab-list-body">
-          <div v-if="!previewBookmarks.length" class="tab-empty">该分类下暂无书签</div>
+        <!-- 备忘录 tab -->
+        <div v-else-if="detailTab === 'memos'" class="tab-list-body">
+          <div v-if="!previewMemos.length" class="tab-empty">该分类下暂无备忘录</div>
           <PreviewItem
-            v-for="b in previewBookmarks"
-            :key="b.short_id"
-            :icon="LinkOutlined" variant="bookmark"
-            :title="b.title || b.url" :desc="b.url"
-            @click="router.push({ path: '/bookmarks', query: { id: b.short_id } })"
+            v-for="m in previewMemos"
+            :key="m.short_id"
+            :icon="FileTextOutlined" variant="memo"
+            :title="m.title || '(无标题)'" :desc="excerpt(m)"
+            @click="router.push({ path: '/memos', query: { id: m.short_id } })"
           />
         </div>
       </div>

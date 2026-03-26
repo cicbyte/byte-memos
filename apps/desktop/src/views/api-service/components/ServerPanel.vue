@@ -101,7 +101,7 @@ function copyText(text: string) {
   </div>
 
   <p class="hint">
-    供第三方应用通过标准 HTTP 对接书签库。CLI：<code>bs api serve</code>。端点文档见「API 文档」。
+    供第三方应用通过标准 HTTP 对接备忘录库。CLI：<code>bm api serve</code>。端点文档见「API 文档」。
   </p>
   <AlertNotice v-if="!apiUseAuth" type="warning" style="margin-top: 8px;">
     当前无鉴权，绑定 <code>0.0.0.0</code> 时任何人都可访问。

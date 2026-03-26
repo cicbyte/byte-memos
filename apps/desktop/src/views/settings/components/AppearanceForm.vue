@@ -30,11 +30,11 @@ const editLight = ref<ThemeColors>({ ...themeStore.custom.light });
 
 const editColors = computed(() => (editTab.value === "dark" ? editDark.value : editLight.value));
 
-/** 即时视觉：拖动只更新 CSS 变量（轻量高频；不触发 antd/Monaco/持久化） */
+/** 即时视觉：拖动只更新 CSS 变量（轻量高频；不触发 antd/持久化） */
 function applyLive() {
   applyColorsToDOM(editColors.value, editTab.value, themeStore.regions[editTab.value]);
 }
-/** 完整应用：持久化两边 + antd + Monaco */
+/** 完整应用：持久化两边 + antd */
 function applyCustom() {
   themeStore.setCustomColors("light", { ...editLight.value });
   themeStore.setCustomColors("dark", { ...editDark.value });
@@ -69,8 +69,8 @@ function onHexCommit(field: keyof ThemeColors, value: string) {
 }
 
 function resetVariant() {
-  editDark.value = buildPresetColors("blue", "dark");
-  editLight.value = buildPresetColors("blue", "light");
+  editDark.value = buildPresetColors("paper", "dark");
+  editLight.value = buildPresetColors("paper", "light");
   applyCustom();
   message.success("已重置为默认配色");
 }
@@ -156,7 +156,7 @@ function exportToFile() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "byte-link-theme.json";
+  a.download = "byte-memos-theme.json";
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -382,7 +382,7 @@ function onImportFile(e: Event) {
   border: 1px solid var(--border-base); border-radius: 4px; overflow: hidden;
 }
 .json-editor-wrap :deep(.snippet-editor) { flex: 1; height: auto; }
-/* JSON 文本编辑（替代已移除的 SnippetEditor/Monaco） */
+/* JSON 文本编辑（纯 textarea，不再依赖编辑器组件） */
 .json-textarea {
   flex: 1;
   width: 100%;

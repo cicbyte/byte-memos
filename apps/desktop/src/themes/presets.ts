@@ -1,12 +1,14 @@
 /**
- * 主题色板：5 套内置预设（派生）+ 1 套自定义。
+ * 主题色板：5 套内置预设（浅/深双态专色板）+ 1 套自定义。
  *
- * 「好看」的来源（移植自 ax）：
- * - blue 预设用精调 slate 中性色板（NEUTRAL），浅/深各一套；
- * - 其余预设只定义 primary + bgBase，由 derivePaletteFromBase 派生带色相的协调中性色
- *   （背景/边框/输入框/浮层向白或黑渐变，文字保持中性 slate 保证可读）。
+ * 设计取向（参考 byte-writer，纸感优先）：
+ * - 每套预设浅/深两态都是「精调专色板」——中性色（背景/文字/边框）带统一色相温度，
+ *   低饱和、暖纸感，而非从单一主色机械派生的工具灰；
+ * - 主色克制：纸墨用墨色（黑底白字主按钮，Linear 质感），其余四套用低饱和的中国传统色
+ *   （青黛/青瓷/藕荷/茶褐），避免高饱和「管理后台蓝绿橙红」；
+ * - 自定义主题仍可用 deriveBaseLayer 由底色自动派生协调色板（兜底工具）。
  *
- * byte-link 扩展：在 ax 基础 12 token 之外补充状态色（success/warning/danger/info）+
+ * 扩展层：在 ax 基础 12 token 之外补充状态色（success/warning/danger/info）+
  * 禁用文字 + 主色三态 + 阴影，按明暗固定提供，不参与预设色调（按钮/消息始终可辨）。
  *
  * 区域语义层（REGION_DEFS）独立于预设：任何预设下都可叠加区域微调，跨预设保留。
@@ -46,52 +48,191 @@ export const EXT_CSS_VARS: Record<string, string> = {
   shadowMd: "--shadow-md",
 };
 
-/** blue 预设的精调 slate 中性色板（浅/深各一套）—— 配色协调的根基 */
-const NEUTRAL: Record<ResolvedMode, Omit<ThemeColors, "primary" | "primaryBg" | "colorHover" | "textDisabled" | "primaryHover" | "primaryActive" | "primaryBorder" | "success" | "warning" | "danger" | "info" | "successBg" | "warningBg" | "dangerBg" | "infoBg" | "shadowMd">> = {
-  dark: {
-    bgBase: "#0f172a",
-    bgSurface: "#1e293b",
-    bgInput: "#334155",
-    bgElevated: "#273449",
-    textPrimary: "#f1f5f9",
-    textSecondary: "#94a3b8",
-    textTertiary: "#64748b",
-    borderBase: "#334155",
-    borderLight: "#243049",
-  },
-  light: {
-    bgBase: "#f8fafc",
-    bgSurface: "#ffffff",
-    bgInput: "#f1f5f9",
-    bgElevated: "#f1f5f9",
-    textPrimary: "#0f172a",
-    textSecondary: "#475569",
-    textTertiary: "#94a3b8",
-    borderBase: "#cbd5e1",
-    borderLight: "#e2e8f0",
-  },
-};
+/** 预设专色板：单明暗态的完整基础层（主色 + 9 个中性 token），全部手工精调 */
+export interface PresetPalette {
+  primary: string;
+  bgBase: string;
+  bgSurface: string;
+  bgInput: string;
+  bgElevated: string;
+  textPrimary: string;
+  textSecondary: string;
+  textTertiary: string;
+  borderBase: string;
+  borderLight: string;
+}
 
-/** 5 套预设主色 + 底色（浅/深；色值与 ax 完全一致） */
-export const PRESETS: Record<BuiltinPreset, { label: string; primary: Record<ResolvedMode, string>; bgBase: Record<ResolvedMode, string> }> = {
-  blue: { label: "经典蓝", primary: { light: "#2563eb", dark: "#60a5fa" }, bgBase: { light: "#f8fafc", dark: "#0f172a" } },
-  emerald: { label: "翡翠绿", primary: { light: "#059669", dark: "#34d399" }, bgBase: { light: "#f1f6f3", dark: "#0a1612" } },
-  violet: { label: "紫罗兰", primary: { light: "#7c3aed", dark: "#a78bfa" }, bgBase: { light: "#f5f2f8", dark: "#140f1d" } },
-  amber: { label: "琥珀橙", primary: { light: "#d97706", dark: "#fbbf24" }, bgBase: { light: "#faf6f0", dark: "#1a140a" } },
-  rose: { label: "玫瑰红", primary: { light: "#e11d48", dark: "#fb7185" }, bgBase: { light: "#f8f2f4", dark: "#1a0d11" } },
+/**
+ * 5 套内置预设（浅/深各一套专色板，参考 byte-writer）。
+ *
+ * 浅色共同语言：画布带轻微色相的暖/冷灰，纸面近白，文字同色相墨色，细线低饱和。
+ * 深色共同语言：带色相的炭底（不死黑），亮度小步长递进，米白文字。
+ */
+export const PRESETS: Record<BuiltinPreset, { label: string; palette: Record<ResolvedMode, PresetPalette> }> = {
+  // 纸墨（默认）：暖灰画布 + 白纸 + 墨色主色；深色为暖炭夜纸。
+  // 主色即墨——浅色黑底白字主按钮、深色纸白主按钮，品牌色让位于文字本身。
+  paper: {
+    label: "纸墨",
+    palette: {
+      light: {
+        primary: "#1b1c1f",
+        bgBase: "#f1f1ee",
+        bgSurface: "#ffffff",
+        bgInput: "#f3f3f1",
+        bgElevated: "#f8f8f7",
+        textPrimary: "#1c1d21",
+        textSecondary: "#5c6167",
+        textTertiary: "#97999d",
+        borderBase: "#dcdcd9",
+        borderLight: "#e9e9e7",
+      },
+      dark: {
+        primary: "#f2f2f0",
+        bgBase: "#191a1c",
+        bgSurface: "#232527",
+        bgInput: "#2d2f31",
+        bgElevated: "#282a2c",
+        textPrimary: "#ececee",
+        textSecondary: "#a3a6aa",
+        textTertiary: "#74777c",
+        borderBase: "#3a3c3f",
+        borderLight: "#2d2f31",
+      },
+    },
+  },
+  // 青黛：雾靛蓝。蓝而不艳，替换旧「经典蓝」的 slate 工具感。
+  indigo: {
+    label: "青黛",
+    palette: {
+      light: {
+        primary: "#46618f",
+        bgBase: "#f1f2f5",
+        bgSurface: "#ffffff",
+        bgInput: "#f2f3f6",
+        bgElevated: "#f7f8fa",
+        textPrimary: "#1d2027",
+        textSecondary: "#565d6b",
+        textTertiary: "#949aa5",
+        borderBase: "#d8dae0",
+        borderLight: "#e7e8ed",
+      },
+      dark: {
+        primary: "#8ca3cc",
+        bgBase: "#15171d",
+        bgSurface: "#1e2129",
+        bgInput: "#282c36",
+        bgElevated: "#232730",
+        textPrimary: "#e9ebf0",
+        textSecondary: "#a0a6b3",
+        textTertiary: "#707583",
+        borderBase: "#343945",
+        borderLight: "#282c36",
+      },
+    },
+  },
+  // 青瓷：青瓷绿。雨过天青的低饱和绿，替换旧「翡翠绿」。
+  celadon: {
+    label: "青瓷",
+    palette: {
+      light: {
+        primary: "#47796b",
+        bgBase: "#eef2f0",
+        bgSurface: "#ffffff",
+        bgInput: "#f0f3f1",
+        bgElevated: "#f5f8f6",
+        textPrimary: "#1b211f",
+        textSecondary: "#55605b",
+        textTertiary: "#939c97",
+        borderBase: "#d7ded9",
+        borderLight: "#e6ebe8",
+      },
+      dark: {
+        primary: "#82b0a0",
+        bgBase: "#131a17",
+        bgSurface: "#1b2420",
+        bgInput: "#242e29",
+        bgElevated: "#202925",
+        textPrimary: "#e8ece9",
+        textSecondary: "#9da8a1",
+        textTertiary: "#6e7973",
+        borderBase: "#303b35",
+        borderLight: "#242e29",
+      },
+    },
+  },
+  // 藕荷：灰紫。莲藕花瓣的柔和紫，替换旧「紫罗兰」的高饱和 violet。
+  plum: {
+    label: "藕荷",
+    palette: {
+      light: {
+        primary: "#6f6494",
+        bgBase: "#f3f2f6",
+        bgSurface: "#ffffff",
+        bgInput: "#f4f3f7",
+        bgElevated: "#f8f8fa",
+        textPrimary: "#201e28",
+        textSecondary: "#5a5768",
+        textTertiary: "#96939f",
+        borderBase: "#dad8e0",
+        borderLight: "#e9e8ee",
+      },
+      dark: {
+        primary: "#a79bd0",
+        bgBase: "#17151d",
+        bgSurface: "#201e29",
+        bgInput: "#2a2735",
+        bgElevated: "#252230",
+        textPrimary: "#eae8ef",
+        textSecondary: "#a5a1b4",
+        textTertiary: "#746f82",
+        borderBase: "#363244",
+        borderLight: "#2a2735",
+      },
+    },
+  },
+  // 茶褐：焙茶棕。温润的茶汤色，替换旧「琥珀橙」的警示感橙。
+  tea: {
+    label: "茶褐",
+    palette: {
+      light: {
+        primary: "#8a6242",
+        bgBase: "#f6f3ed",
+        bgSurface: "#fffdf9",
+        bgInput: "#f6f4ee",
+        bgElevated: "#faf8f3",
+        textPrimary: "#262019",
+        textSecondary: "#5f574c",
+        textTertiary: "#9b9184",
+        borderBase: "#e0d9cc",
+        borderLight: "#ece6da",
+      },
+      dark: {
+        primary: "#c49a72",
+        bgBase: "#191612",
+        bgSurface: "#221e19",
+        bgInput: "#2c2721",
+        bgElevated: "#27221d",
+        textPrimary: "#ede8df",
+        textSecondary: "#a89e8f",
+        textTertiary: "#786e60",
+        borderBase: "#393229",
+        borderLight: "#2c2721",
+      },
+    },
+  },
 };
 
 /** 预设列表（UI 用，固定顺序） */
 export const PRESET_LIST: { key: BuiltinPreset; label: string }[] = [
-  { key: "blue", label: "经典蓝" },
-  { key: "emerald", label: "翡翠绿" },
-  { key: "violet", label: "紫罗兰" },
-  { key: "amber", label: "琥珀橙" },
-  { key: "rose", label: "玫瑰红" },
+  { key: "paper", label: "纸墨" },
+  { key: "indigo", label: "青黛" },
+  { key: "celadon", label: "青瓷" },
+  { key: "plum", label: "藕荷" },
+  { key: "tea", label: "茶褐" },
 ];
 
 /** 扩展层固定补充（按明暗；不参与预设色调） */
-const SUPPLEMENT: Record<ResolvedMode, Omit<ThemeColors, keyof typeof NEUTRAL.dark | "primary" | "primaryBg" | "colorHover">> = {
+const SUPPLEMENT: Record<ResolvedMode, Omit<ThemeColors, keyof PresetPalette | "primaryBg" | "colorHover">> = {
   dark: {
     textDisabled: "#475569",
     primaryHover: "", // 由 primary 派生（见 derivePrimaryStates）
@@ -197,23 +338,19 @@ export function deriveBaseLayer(base: string, mode: ResolvedMode, primary: strin
   };
 }
 
-/** 由预设 + 明暗组装完整 ThemeColors（基础派生 + 扩展补充 + 主色三态） */
+/** 由预设 + 明暗组装完整 ThemeColors（专色板 + 扩展补充 + 主色三态） */
 export function buildPresetColors(preset: BuiltinPreset, mode: ResolvedMode): ThemeColors {
-  const def = PRESETS[preset];
-  const primary = def.primary[mode];
-  // blue 沿用精调 slate 中性色（视觉零变化）；其余由带调性底色派生
-  const base = preset === "blue" ? NEUTRAL[mode] : deriveBaseLayer(def.bgBase[mode], mode, primary);
+  const palette = PRESETS[preset].palette[mode];
   const sup = SUPPLEMENT[mode];
-  const states = derivePrimaryStates(primary);
+  const states = derivePrimaryStates(palette.primary);
   return {
-    ...base,
-    primary,
-    primaryBg: derivePrimaryBg(primary),
+    ...palette,
+    primaryBg: derivePrimaryBg(palette.primary),
     colorHover: deriveHover(mode),
     textDisabled: sup.textDisabled,
     primaryHover: states.primaryHover,
     primaryActive: states.primaryActive,
-    primaryBorder: derivePrimaryBorder(primary),
+    primaryBorder: derivePrimaryBorder(palette.primary),
     success: sup.success,
     warning: sup.warning,
     danger: sup.danger,
@@ -226,9 +363,9 @@ export function buildPresetColors(preset: BuiltinPreset, mode: ResolvedMode): Th
   };
 }
 
-/** 自定义默认色板：blue 预设浅/深副本（切到自定义无视觉跳变） */
+/** 自定义默认色板：paper 预设浅/深副本（切到自定义无视觉跳变） */
 export function defaultCustom(): { light: ThemeColors; dark: ThemeColors } {
-  return { light: buildPresetColors("blue", "light"), dark: buildPresetColors("blue", "dark") };
+  return { light: buildPresetColors("paper", "light"), dark: buildPresetColors("paper", "dark") };
 }
 
 /** 用户可编辑的基础层 token（派生项与扩展层不开放） */

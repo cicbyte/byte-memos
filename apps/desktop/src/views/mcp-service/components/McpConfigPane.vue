@@ -6,12 +6,17 @@
  * - 配置文案来自 ../lib/constants 的 mcpGuide
  * - 主题跟随全局 themeStore
  */
-import { MdPreview } from "md-editor-v3";
+import { defineAsyncComponent } from "vue";
 import "md-editor-v3/lib/style.css";
 import { useThemeStore } from "@/stores/theme";
 import { mcpGuide } from "../lib/constants";
 
 const themeStore = useThemeStore();
+
+/** 预览组件懒加载：与编辑器共用 md-editor-v3 异步 chunk，主包不背 1.6MB */
+const MdPreview = defineAsyncComponent(
+  () => import("md-editor-v3").then((m) => m.MdPreview),
+);
 </script>
 
 <template>

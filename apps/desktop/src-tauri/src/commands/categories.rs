@@ -26,3 +26,16 @@ pub fn rename_category(state: tauri::State<'_, AppState>, id: i64, name: String)
 pub fn delete_category(state: tauri::State<'_, AppState>, id: i64) -> Result<(), String> {
     state.svc().delete_category(id).map_err(|e| e.to_string())
 }
+
+/// 设置分类主题色（color 传 None 清除）
+#[tauri::command]
+pub fn set_category_color(
+    state: tauri::State<'_, AppState>,
+    id: i64,
+    color: Option<String>,
+) -> Result<(), String> {
+    state
+        .svc()
+        .set_category_color(id, color.as_deref())
+        .map_err(|e| e.to_string())
+}

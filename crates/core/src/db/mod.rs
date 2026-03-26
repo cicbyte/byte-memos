@@ -157,7 +157,7 @@ impl Database {
     pub fn list_categories(&self) -> CoreResult<Vec<Category>> {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
-            "SELECT c.id, c.name,
+            "SELECT c.id, c.name, c.color,
                 (SELECT COUNT(*) FROM memo m
                  WHERE m.category_id = c.id AND m.deleted_at IS NULL) AS memo_cnt
              FROM project_categories c
@@ -168,7 +168,8 @@ impl Database {
                 Ok(Category {
                     id: r.get(0)?,
                     name: r.get(1)?,
-                    memo_count: r.get(2)?,
+                    color: r.get(2)?,
+                    memo_count: r.get(3)?,
                 })
             })?
             .filter_map(|r| r.ok())
@@ -203,6 +204,19 @@ impl Database {
         let affected = conn.execute(
             "DELETE FROM project_categories WHERE id = ?",
             params![id],
+        )?;
+        if affected == 0 {
+            return Err(CoreError::NotFound(format!("分类 id={id}")));
+        }
+        Ok(())
+    }
+
+    /// 设置分类主题色（None 清除）
+    pub fn set_category_color(&self, id: i64, color: Option<&str>) -> CoreResult<()> {
+        let conn = self.lock()?;
+        let affected = conn.execute(
+            "UPDATE project_categories SET color = ? WHERE id = ?",
+            params![color, id],
         )?;
         if affected == 0 {
             return Err(CoreError::NotFound(format!("分类 id={id}")));

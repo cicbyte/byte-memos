@@ -32,7 +32,7 @@ pub(super) async fn list_memos(
     let filter = MemoFilter {
         tag: q.tag,
         category: q.category,
-        favorited_only: q.pinned_only.unwrap_or(false),
+        pinned_only: q.pinned_only.unwrap_or(false),
         limit: q.limit,
         offset: q.offset,
         ..Default::default()

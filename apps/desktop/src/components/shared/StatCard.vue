@@ -2,7 +2,7 @@
 /**
  * StatCard —— 概览统计卡（图标 + 数值 + 标签，可选「查看→」入口）
  *
- * variant 决定图标颜色：bookmark(主色)。
+ * variant 决定图标颜色：memo(主色)。
  * go=true 时显示「查看 →」提示（如分类概览卡跳转列表页）。
  */
 import type { Component } from "vue";
@@ -10,12 +10,12 @@ import type { Component } from "vue";
 withDefaults(
   defineProps<{
     icon: Component;
-    variant?: "bookmark";
+    variant?: "memo";
     value: string | number;
     label: string;
     go?: boolean;
   }>(),
-  { variant: "bookmark", go: false },
+  { variant: "memo", go: false },
 );
 defineEmits<{ (e: "click"): void }>();
 </script>
@@ -50,7 +50,7 @@ defineEmits<{ (e: "click"): void }>();
   font-size: 22px;
   margin-bottom: 8px;
 }
-.stat-icon.bookmark {
+.stat-icon.memo {
   color: var(--color-primary);
 }
 .stat-value {

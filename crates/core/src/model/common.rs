@@ -54,6 +54,9 @@ pub struct StatsOverview {
 pub struct Category {
     pub id: i64,
     pub name: String,
+    /// 分类主题色（hex，可空——未设置时前端用默认色）
+    #[serde(default)]
+    pub color: Option<String>,
     /// 该分类下的活跃笔记数
     #[serde(default)]
     pub memo_count: i64,

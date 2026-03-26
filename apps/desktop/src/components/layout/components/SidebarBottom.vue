@@ -7,7 +7,7 @@ defineProps<{ collapsed: boolean }>();
 
 <template>
   <div class="sidebar-bottom">
-    <span v-if="!collapsed" class="sidebar-version">byte-link v0.1</span>
+    <span v-if="!collapsed" class="sidebar-version">byte-memos v0.1</span>
   </div>
 </template>
 

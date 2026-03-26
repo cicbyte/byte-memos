@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "byte-link",
+  "productName": "byte-memos",
   "version": "0.1.0",
-  "identifier": "com.cicbyte.byte-link",
+  "identifier": "com.cicbyte.byte-memos",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:51420",
+    "devUrl": "http://localhost:14321",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },
   "app": {
     "windows": [
       {
-        "title": "byte-link",
+        "title": "byte-memos",
         "width": 1280,
         "height": 800,
         "minWidth": 900,

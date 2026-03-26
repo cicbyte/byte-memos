@@ -110,7 +110,7 @@ function copyText(text: string) {
   </div>
 
   <p class="hint">
-    供 AI 工具通过 MCP 协议检索书签。stdio 模式无需在此启动，见「配置」标签。
+    供 AI 工具通过 MCP 协议检索备忘录。stdio 模式无需在此启动，见「配置」标签。
   </p>
   <AlertNotice v-if="!mcpUseAuth" type="warning" style="margin-top: 8px;">
     当前无鉴权，绑定 <code>0.0.0.0</code> 时任何人都可访问。

@@ -36,12 +36,12 @@ async function chooseDataDir() {
   if (!dir) return;
   Modal.confirm({
     title: "更改数据目录",
-    content: "新目录：" + dir + "\n\n点击确定后需要重启 byte-link 使新目录生效。当前数据不会自动迁移，如需迁移请先用「导出备份」。",
+    content: "新目录：" + dir + "\n\n点击确定后需要重启 byte-memos 使新目录生效。当前数据不会自动迁移，如需迁移请先用「导出备份」。",
     okText: "确定，重启后生效",
     cancelText: "取消",
     onOk: async () => {
       await api.setDataDir(dir);
-      message.success("已设置，请重启 byte-link");
+      message.success("已设置，请重启 byte-memos");
     },
   });
 }
@@ -80,7 +80,7 @@ async function importBackup() {
   if (!file) return;
   Modal.confirm({
     title: "恢复备份",
-    content: "将从 " + file + " 恢复数据，当前数据会被覆盖。恢复后需要重启 byte-link。",
+    content: "将从 " + file + " 恢复数据，当前数据会被覆盖。恢复后需要重启 byte-memos。",
     okText: "确定恢复",
     okType: "danger",
     cancelText: "取消",
@@ -88,7 +88,7 @@ async function importBackup() {
       restoring.value = true;
       try {
         await api.restore(file);
-        message.success("已恢复，请重启 byte-link");
+        message.success("已恢复，请重启 byte-memos");
       } catch (e: any) {
         message.error(typeof e === "string" ? e : "恢复失败");
       } finally {

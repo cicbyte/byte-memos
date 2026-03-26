@@ -51,7 +51,7 @@ fn default_visibility() -> String {
 }
 
 /// 更新笔记输入
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct UpdateMemoInput {
     /// 标题（可选）
     pub title: Option<String>,
@@ -74,10 +74,8 @@ pub struct MemoFilter {
     pub tag: Option<String>,
     /// 按分类筛选
     pub category: Option<String>,
-    /// 是否已归档
-    pub archived: bool,
-    /// 仅收藏
-    pub favorited_only: bool,
+    /// 仅置顶
+    pub pinned_only: bool,
     /// 分页：每页数量
     pub limit: Option<i64>,
     /// 分页：偏移量

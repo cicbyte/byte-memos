@@ -45,7 +45,9 @@ export interface MotionPrefs {
 const SPEED_FACTOR: Record<MotionSpeed, number> = { fast: 0.7, normal: 1, slow: 1.35 };
 const OFFSET_PX: Record<MotionOffset, number> = { none: 0, light: 8, strong: 14 };
 
-const MOTION_KEY = "byte-link-motion";
+const MOTION_KEY = "byte-memos-motion";
+/** 旧品牌 key：读到旧值时迁移到新 key */
+const LEGACY_MOTION_KEY = "byte-link-motion";
 const DEFAULT_PREFS: MotionPrefs = {
   enabled: true,
   bounce: true,
@@ -57,7 +59,8 @@ const DEFAULT_PREFS: MotionPrefs = {
 
 function loadPrefs(): MotionPrefs {
   try {
-    return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(MOTION_KEY) || "{}") };
+    const raw = localStorage.getItem(MOTION_KEY) || localStorage.getItem(LEGACY_MOTION_KEY) || "{}";
+    return { ...DEFAULT_PREFS, ...JSON.parse(raw) };
   } catch {
     return { ...DEFAULT_PREFS };
   }
@@ -147,7 +150,7 @@ export const vRevealGroup = {
 
 /**
  * 详情内容切换淡入：监听依赖（如 selected.short_id）变化，对新内容做 fromTo。
- * 关键：只动外层容器的 opacity+y，不卸载任何子组件（Monaco / MdEditor 等保持实例）。
+ * 关键：只动外层容器的 opacity+y，不卸载任何子组件（MdEditor 等保持实例）。
  */
 export function revealOnChange(
   getEl: () => Element | null | undefined,

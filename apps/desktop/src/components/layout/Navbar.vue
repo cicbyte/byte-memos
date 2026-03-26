@@ -64,18 +64,9 @@ function closeDropdown() {
   showDropdown.value = false;
 }
 function onPick(hit: UnifiedSearchHit) {
-  // 书签：直接打开浏览器（而非跳转列表）
-  if (hit.item_type === "bookmark") {
-    api
-      .getBookmark(hit.short_id)
-      .then((b) => {
-        api.incrementBookmarkVisit(b.short_id).catch(() => {});
-        api.openUrl(b.url);
-      })
-      .catch(() => {});
-    closeDropdown();
-    q.value = "";
-    return;
+  // 备忘录：跳转到 /memos 打开对应编辑（?id=）
+  if (hit.item_type === "memo") {
+    router.push({ path: "/memos", query: { id: hit.short_id } });
   }
   closeDropdown();
   q.value = "";
@@ -86,18 +77,18 @@ function stripMarks(s: string): string {
 
 // 类型展示信息：标签文字 + CSS class（配色由 style 控制）
 const TYPE_META: Record<ItemType, { label: string; cls: string }> = {
-  bookmark: { label: "书签", cls: "type-bookmark" },
+  memo: { label: "备忘录", cls: "type-memo" },
 };
 
 // 按 item_type 分组（保持 rank 升序，每组最多 4 条）
 const groupedHits = computed(() => {
   const groups: Record<ItemType, UnifiedSearchHit[]> = {
-    bookmark: [],
+    memo: [],
   };
   for (const h of searchHits.value) {
     groups[h.item_type].push(h);
   }
-  return (["bookmark"] as ItemType[])
+  return (["memo"] as ItemType[])
     .map((t) => ({ type: t, items: groups[t].slice(0, 4) }))
     .filter((g) => g.items.length > 0);
 });
@@ -105,7 +96,7 @@ const groupedHits = computed(() => {
 /** 面包屑：分组 / 页名 两级（来自 route.meta.group + title） */
 const breadcrumbItems = computed(() => {
   const group = (route.meta.group as string) || "";
-  const title = (route.meta.title as string) || "byte-link";
+  const title = (route.meta.title as string) || "byte-memos";
   const items: { label: string }[] = [];
   if (group) items.push({ label: group });
   items.push({ label: title });
@@ -142,7 +133,7 @@ const breadcrumbItems = computed(() => {
       <div class="search-wrapper" data-tauri-drag-region="false">
         <a-input
           v-model:value="q"
-          placeholder="搜索书签…"
+          placeholder="搜索备忘录…"
           class="search-box"
           allow-clear
           @focus="onFocusSearch"
@@ -235,8 +226,7 @@ const breadcrumbItems = computed(() => {
   display: flex;
   align-items: center;
   padding: 0 var(--spacing-md);
-  border-bottom: 1px solid var(--border-frame);
-  background: var(--bg-header);
+  /* 悬浮面板体系：底色/边框由 AppLayout 的 shell-panel 提供 */
   flex-shrink: 0;
   user-select: none;
 }
@@ -339,8 +329,8 @@ const breadcrumbItems = computed(() => {
   border-radius: var(--radius-xs);
   line-height: 1.5;
 }
-/* 类型配色：书签=主色（color-mix 派生，与主题系统一致） */
-.type-bookmark {
+/* 类型配色：备忘录=主色（color-mix 派生，与主题系统一致） */
+.type-memo {
   color: var(--color-primary);
   background: color-mix(in oklch, var(--color-primary) 14%, transparent);
 }

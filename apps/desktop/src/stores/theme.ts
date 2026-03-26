@@ -3,7 +3,7 @@
  *
  * 状态：preset（5 预设 + custom）/ mode（auto·light·dark）/ custom（自定义浅深色板）/
  *       regions（区域覆盖表，浅深各一套，跨预设保留）
- * apply()：注入基础层 + 扩展层 + 区域覆盖 CSS 变量 + antd ConfigProvider + Monaco。
+ * apply()：注入基础层 + 扩展层 + 区域覆盖 CSS 变量 + antd ConfigProvider。
  *
  * 「好看」来自 presets.ts 的派生：blue 精调 slate，其余由 bgBase 派生协调中性色。
  * 偏好纯前端持久化（localStorage），不碰 config.toml——避免 ax 的「死字段」坑。
@@ -35,7 +35,9 @@ import {
 } from "@/themes/presets";
 import { applyColorsToDOM, buildAntdToken } from "@/themes/token";
 
-const STORAGE_KEY = "byte-link-theme";
+const STORAGE_KEY = "byte-memos-theme";
+/** 旧品牌 key：首次读到时迁移到新 key（loadAndMigrate 兜底），读后不清除以防降级丢数据 */
+const LEGACY_STORAGE_KEY = "byte-link-theme";
 const LEGACY_CUSTOM_KEY = "byte-link-custom-theme";
 const THEME_STATE_VERSION = 4;
 
@@ -48,7 +50,7 @@ interface ThemeState {
 }
 
 function isPresetKey(v: unknown): v is PresetKey {
-  return v === "blue" || v === "emerald" || v === "violet" || v === "amber" || v === "rose" || v === "custom";
+  return v === "paper" || v === "indigo" || v === "celadon" || v === "plum" || v === "tea" || v === "custom";
 }
 function isMode(v: unknown): v is Mode {
   return v === "auto" || v === "light" || v === "dark";
@@ -63,14 +65,14 @@ function isValidRegions(v: unknown): v is { light: RegionOverrides; dark: Region
   });
 }
 
-/** 旧 byte-link themeId → 新 preset 映射（terminal-cyan 无对应，回落 blue） */
+/** 旧 byte-link themeId → 新 preset 映射（色相近似对齐；无对应回落 paper） */
 function mapLegacyThemeId(id: unknown): PresetKey {
   switch (id) {
-    case "calm-blue": return "blue";
-    case "minimal-green": return "emerald";
-    case "rust-amber": return "amber";
+    case "calm-blue": return "indigo";
+    case "minimal-green": return "celadon";
+    case "rust-amber": return "tea";
     case "custom": return "custom";
-    default: return "blue";
+    default: return "paper";
   }
 }
 
@@ -78,7 +80,7 @@ function mapLegacyThemeId(id: unknown): PresetKey {
 function migrateCustomFromLegacy(legacy: { dark?: Partial<ThemeColors>; light?: Partial<ThemeColors> } | null): { light: ThemeColors; dark: ThemeColors } {
   if (!legacy || !legacy.dark || !legacy.light) return defaultCustom();
   const pick = (m: ResolvedMode): ThemeColors => {
-    const base = buildPresetColors("blue", m); // 骨架（保证新字段齐全）
+    const base = buildPresetColors("paper", m); // 骨架（保证新字段齐全）
     const src = (m === "dark" ? legacy.dark : legacy.light) as Partial<ThemeColors>;
     return { ...base, ...src, colorHover: deriveHover(m) };
   };
@@ -87,7 +89,7 @@ function migrateCustomFromLegacy(legacy: { dark?: Partial<ThemeColors>; light?: 
 
 export const useThemeStore = defineStore("theme", () => {
   // ===== state =====
-  const preset = ref<PresetKey>("blue");
+  const preset = ref<PresetKey>("paper");
   const mode = ref<Mode>("auto");
   const custom = ref<{ light: ThemeColors; dark: ThemeColors }>(defaultCustom());
   const regions = ref<{ light: RegionOverrides; dark: RegionOverrides }>({ light: {}, dark: {} });
@@ -157,7 +159,7 @@ export const useThemeStore = defineStore("theme", () => {
     persist();
   }
   function resetVariant(m: ResolvedMode) {
-    custom.value[m] = buildPresetColors("blue", m);
+    custom.value[m] = buildPresetColors("paper", m);
     apply();
     persist();
   }
@@ -221,7 +223,7 @@ export const useThemeStore = defineStore("theme", () => {
   }
 
   function freshState(): ThemeState {
-    return { version: THEME_STATE_VERSION, preset: "blue", mode: "auto", custom: defaultCustom(), regions: { light: {}, dark: {} } };
+    return { version: THEME_STATE_VERSION, preset: "paper", mode: "auto", custom: defaultCustom(), regions: { light: {}, dark: {} } };
   }
 
   /** 任意 parsed → 合法 ThemeState（枚举校验 + 缺字段兜底）。loadMigrate 与 applyRawState 共用 */
@@ -244,7 +246,7 @@ export const useThemeStore = defineStore("theme", () => {
     // 新结构 {preset, mode, custom, regions}
     if (parsed && typeof parsed === "object" && Object.prototype.hasOwnProperty.call(parsed, "preset")) {
       const s = parsed as Partial<ThemeState>;
-      const presetKey = isPresetKey(s.preset) ? s.preset : "blue";
+      const presetKey = isPresetKey(s.preset) ? s.preset : "paper";
       return {
         version: THEME_STATE_VERSION,
         preset: presetKey,
@@ -256,9 +258,13 @@ export const useThemeStore = defineStore("theme", () => {
     return freshState();
   }
 
-  /** 读 + 迁移 localStorage（新结构 / 旧 byte-link 结构 → v4） */
+  /** 读 + 迁移 localStorage（新结构 / 旧 byte-link 结构 → v4；旧品牌 key → 新 key） */
   function loadAndMigrate(): ThemeState {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      // 品牌迁移：byte-link 时代的主题数据首次落到 byte-memos key
+      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    }
     if (!raw) return freshState();
     let parsed: unknown;
     try {

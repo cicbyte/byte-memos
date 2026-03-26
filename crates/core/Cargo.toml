@@ -24,9 +24,6 @@ zip = "2"
 toml = "0.8"
 regex = "1"
 
-# favicon 抓取（F11：best-effort 缓存站点图标；rustls-tls 无系统 OpenSSL 依赖，Windows 友好）
-reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
-
 # MCP（feature gate，启用 mcp feature 时才编译）
 rmcp = { workspace = true, optional = true }
 schemars = { workspace = true, optional = true }

@@ -24,31 +24,31 @@ export interface McpToolDef {
   params: ToolParam[];
 }
 
-/** MCP 工具列表（读取类） */
+/** MCP 工具列表（读取类）——对齐 crates/core/src/mcp/server.rs 实际工具定义 */
 export const readTools: McpToolDef[] = [
-  { name: "search", desc: "搜索书签（支持中文模糊匹配）", params: [
+  { name: "search", desc: "搜索备忘录（FTS5 + 中文模糊匹配）", params: [
     { name: "query", type: "string", required: true, desc: "搜索关键词" },
-    { name: "type", type: "string", required: false, desc: "搜索范围：bookmark / all（默认 all）" },
+    { name: "type", type: "string", required: false, desc: "搜索范围：memo / all（默认 all 跨类型合并，支持中文）" },
     { name: "limit", type: "number", required: false, desc: "结果上限（默认 20）" },
     { name: "offset", type: "number", required: false, desc: "偏移量（默认 0，翻页用）" },
   ]},
-  { name: "list", desc: "列出书签 / 标签 / 分类", params: [
-    { name: "type", type: "string", required: true, desc: "列出哪种：bookmark / tag / category" },
+  { name: "list", desc: "列出备忘录 / 标签 / 分类", params: [
+    { name: "type", type: "string", required: true, desc: "列出哪种：memo / tag / category" },
     { name: "limit", type: "number", required: false, desc: "数量上限（默认 20）" },
     { name: "offset", type: "number", required: false, desc: "偏移量（默认 0，tag/category 不支持）" },
   ]},
-  { name: "get", desc: "读取书签详情（标题/URL/描述/标签/分类/访问次数）", params: [
-    { name: "short_id", type: "string", required: true, desc: "书签 shortId" },
-    { name: "type", type: "string", required: true, desc: "内容类型：bookmark" },
+  { name: "get", desc: "读取备忘录详情（标题/内容/标签/分类/置顶/可见性）", params: [
+    { name: "short_id", type: "string", required: true, desc: "备忘录 shortId" },
+    { name: "type", type: "string", required: true, desc: "内容类型：memo" },
   ]},
-  { name: "stats", desc: "统计概览（书签/标签/分类数量与存储占用）", params: [] },
+  { name: "stats", desc: "统计概览（备忘录/标签/分类数量与存储占用）", params: [] },
 ];
 
 /** MCP 工具列表（修改类） */
 export const writeTools: McpToolDef[] = [
-  { name: "delete", desc: "删除书签（移入回收站，可恢复）", params: [
-    { name: "short_id", type: "string", required: true, desc: "书签 shortId" },
-    { name: "type", type: "string", required: true, desc: "删除类型：bookmark" },
+  { name: "delete", desc: "删除备忘录（移入回收站，可恢复）", params: [
+    { name: "short_id", type: "string", required: true, desc: "备忘录 shortId" },
+    { name: "type", type: "string", required: true, desc: "删除类型：memo" },
   ]},
 ];
 
@@ -56,13 +56,13 @@ export const writeTools: McpToolDef[] = [
 export const mcpGuide = `
 ## stdio 配置（Claude Desktop / Cursor）
 
-适用于 AI 工具与 bs 在同一台机器：
+适用于 AI 工具与 bm 在同一台机器：
 
 \`\`\`json
 {
   "mcpServers": {
-    "byte-link": {
-      "command": "bs",
+    "byte-memos": {
+      "command": "bm",
       "args": ["mcp", "serve", "--transport", "stdio"]
     }
   }
@@ -76,12 +76,12 @@ export const mcpGuide = `
 \`\`\`json
 {
   "mcpServers": {
-    "byte-link": {
+    "byte-memos": {
       "url": "http://your-server:8217/mcp"
     }
   }
 }
 \`\`\`
 
-> ⚠️ \`--host 0.0.0.0\` 暴露到公网时无鉴权，建议仅在可信内网使用或加反向代理鉴权。
+> ⚠️ \`--host 0.0.0.0\` 暴露到公网时建议启用 API Key 鉴权，或仅在内网使用。
 `;

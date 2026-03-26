@@ -22,12 +22,12 @@ const version = ref("0.1.0");
       <div class="about-head">
         <Logo :size="48" color="var(--color-primary)" />
         <div class="about-head-info">
-          <div class="about-name">byte-link</div>
+          <div class="about-name">byte-memos</div>
           <div class="about-sub">v{{ version }}</div>
         </div>
       </div>
       <p class="hint">
-        纯本地、单人、零部署的书签管理应用，内嵌 MCP 服务器供 AI 检索。
+        纯本地、单人、零部署的备忘录管理应用，内嵌 MCP 服务器供 AI 检索。
       </p>
     </div>
 
@@ -39,21 +39,21 @@ const version = ref("0.1.0");
         <span class="about-tech-item">Tauri v2</span>
         <span class="about-tech-item">Vue 3</span>
         <span class="about-tech-item">SQLite + FTS5</span>
-        <span class="about-tech-item">Monaco Editor</span>
+        <span class="about-tech-item">md-editor-v3</span>
       </div>
     </div>
 
     <!-- 开源 -->
     <div class="storage-section about-copyright">
       <div class="about-links">
-        <a class="about-link" @click="api.openUrl('https://github.com/cicbyte/byte-link')">
+        <a class="about-link" @click="api.openUrl('https://github.com/cicbyte/byte-memos')">
           <GithubOutlined /> 源代码
         </a>
-        <a class="about-link" @click="api.openUrl('https://github.com/cicbyte/byte-link/blob/main/LICENSE')">
+        <a class="about-link" @click="api.openUrl('https://github.com/cicbyte/byte-memos/blob/main/LICENSE')">
           <SafetyCertificateOutlined /> MIT License
         </a>
       </div>
-      <p class="hint about-footer-hint">© 2026 byte-link</p>
+      <p class="hint about-footer-hint">© 2026 byte-memos</p>
     </div>
   </section>
 </template>

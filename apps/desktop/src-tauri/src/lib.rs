@@ -55,6 +55,7 @@ pub fn run() {
             commands::categories::create_category,
             commands::categories::rename_category,
             commands::categories::delete_category,
+            commands::categories::set_category_color,
             // 统计（标签云 / 概览 / 全局搜索）
             commands::stats::tag_stats,
             commands::stats::stats_overview,
@@ -71,6 +72,9 @@ pub fn run() {
             commands::memos::search_memos,
             commands::memos::restore_memo,
             commands::memos::purge_memo,
+            commands::memos::memo_history,
+            commands::memos::restore_memo_version,
+            commands::memos::export_memo,
             // 回收站（跨类型，仅剩备忘录条目）
             commands::trash::list_trashed,
             commands::trash::empty_trash,

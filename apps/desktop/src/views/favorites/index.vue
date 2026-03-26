@@ -1,24 +1,35 @@
 <script setup lang="ts">
 /**
- * 收藏页 /favorites
+ * 置顶页 /favorites
  *
- * 展示被收藏的书签，点击跳转到书签页对应项（?id=）。
+ * 展示置顶的备忘录，点击跳转到备忘录页对应项（?id=）。
  */
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { LinkOutlined, StarOutlined } from "@ant-design/icons-vue";
+import { FileTextOutlined, PushpinOutlined } from "@ant-design/icons-vue";
 import { api } from "@/api";
 import EmptyState from "@/components/common/EmptyState.vue";
-import type { Bookmark } from "@/api/types";
+import type { Memo } from "@/api/types";
 import { useLayoutStore } from "@/stores/layout";
 
 const router = useRouter();
 const layout = useLayoutStore();
 
-const items = ref<Bookmark[]>([]);
+const items = ref<Memo[]>([]);
 const loading = ref(false);
 
 const filtered = computed(() => items.value);
+
+/** Markdown → 纯文本摘要 */
+function excerpt(m: Memo, max = 100): string {
+  const text = m.content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_~`\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
 
 function fmtDate(iso: string): string {
   return iso ? iso.slice(0, 10) : "";
@@ -27,21 +38,21 @@ function fmtDate(iso: string): string {
 async function load() {
   loading.value = true;
   try {
-    const bms = await api.listBookmarks({ favorited_only: true, limit: 500 });
+    const memos = await api.listMemos({ pinned_only: true, limit: 500 });
     // 按创建时间降序
-    items.value = [...bms].sort((a, b) => b.created_at.localeCompare(a.created_at));
+    items.value = [...memos].sort((a, b) => b.created_at.localeCompare(a.created_at));
     layout.setStatusItems([
-      { key: "view", text: "收藏" },
-      { key: "count", text: `共 ${items.value.length} 项` },
+      { key: "view", text: "置顶" },
+      { key: "count", text: `共 ${items.value.length} 篇` },
     ]);
   } finally {
     loading.value = false;
   }
 }
 
-/** 跳转到书签页对应项 */
-function goTo(it: Bookmark) {
-  router.push({ path: "/bookmarks", query: { id: it.short_id } });
+/** 跳转到备忘录页对应项 */
+function goTo(it: Memo) {
+  router.push({ path: "/memos", query: { id: it.short_id } });
 }
 
 onMounted(load);
@@ -51,14 +62,14 @@ onMounted(load);
   <div class="fav-view">
     <!-- 顶部工具栏 -->
     <div class="toolbar">
-      <span class="page-title">收藏</span>
+      <span class="page-title">置顶</span>
       <span class="count-badge">{{ items.length }}</span>
     </div>
 
     <!-- 列表面板 -->
     <section class="panel">
       <header class="panel-head">
-        <span class="head-title">已收藏书签</span>
+        <span class="head-title">置顶备忘录</span>
         <span class="count-badge">{{ filtered.length }}</span>
       </header>
 
@@ -69,11 +80,11 @@ onMounted(load);
             class="fav-item"
             @click="goTo(it)"
           >
-            <LinkOutlined class="item-icon bookmark" />
+            <FileTextOutlined class="item-icon memo" />
             <div class="item-main">
-              <div class="item-title">{{ it.title || it.url || "(无标题)" }}</div>
+              <div class="item-title">{{ it.title || "(无标题)" }}</div>
               <div class="item-sub">
-                <span v-if="it.description" class="sub-desc">{{ it.description }}</span>
+                <span v-if="excerpt(it)" class="sub-desc">{{ excerpt(it) }}</span>
                 <span v-if="it.category" class="sep">·</span>
                 <span v-if="it.category" class="sub-meta">{{ it.category }}</span>
               </div>
@@ -83,9 +94,9 @@ onMounted(load);
 
           <EmptyState
             v-if="!filtered.length && !loading"
-            :icon="StarOutlined"
-            text="暂无收藏"
-            hint="在书签页点击 ☆ 收藏常用书签"
+            :icon="PushpinOutlined"
+            text="暂无置顶备忘录"
+            hint="在备忘录页点击 📌 置顶常用备忘录"
             size="small"
           />
       </div>
@@ -177,7 +188,7 @@ onMounted(load);
   width: 20px;
   text-align: center;
 }
-.item-icon.bookmark { color: var(--color-primary); }
+.item-icon.memo { color: var(--color-primary); }
 
 .item-main {
   flex: 1;

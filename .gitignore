@@ -112,9 +112,6 @@ ENV/
 env.bak/
 venv.bak/
 
+# === 其他工具目录 ===
 .claude/
-.zcode/
-.reference/
-dev-docs/
-.scratch/
 tests/

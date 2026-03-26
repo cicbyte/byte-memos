@@ -228,7 +228,7 @@ pub async fn run_memo_list(args: MemoListArgs, json: bool) -> anyhow::Result<()>
     let filter = MemoFilter {
         category: args.category,
         tag: args.tag,
-        favorited_only: args.pinned,
+        pinned_only: args.pinned,
         limit: Some(args.limit),
         ..Default::default()
     };

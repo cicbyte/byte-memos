@@ -37,7 +37,20 @@ const emit = defineEmits<{
   commitEdit: [];
   cancelEdit: [];
   remove: [c: Category];
+  setColor: [c: Category, color: string | null];
 }>();
+
+/** 分类主题色预设（与主题五色板同 hue 的低饱和传统色 + 少量补充） */
+const CAT_COLORS = [
+  "#46618f", // 青黛
+  "#47796b", // 青瓷
+  "#6f6494", // 藕荷
+  "#8a6242", // 茶褐
+  "#a05a5a", // 赭红
+  "#3d7ea6", // 黛蓝
+  "#5d7a50", // 苔绿
+  "#8c6d4f", // 驼棕
+];
 
 // 新建输入框 ref —— 等输入框渲染后自动聚焦
 const createInputRef = ref();
@@ -83,6 +96,7 @@ watch(
         :key="c.id"
         class="cat-row"
         :class="{ active: selectedId === c.id }"
+        :style="c.color ? { '--cat-color': c.color } : undefined"
         @click="emit('select', c)"
         @dblclick="emit('startEdit', c)"
       >
@@ -101,7 +115,35 @@ watch(
           </div>
         </template>
         <template v-else>
-          <FolderOutlined class="row-icon" />
+          <!-- 色点：点击弹选色（无色时显示空心默认点） -->
+          <a-popover trigger="click" placement="right" overlay-class-name="cat-color-pop">
+            <template #content>
+              <div class="swatch-grid" @click.stop>
+                <button
+                  v-for="col in CAT_COLORS"
+                  :key="col"
+                  class="swatch"
+                  :class="{ picked: c.color === col }"
+                  :style="{ background: col }"
+                  :title="col"
+                  @click.stop="emit('setColor', c, col)"
+                ></button>
+                <button
+                  class="swatch swatch-none"
+                  :class="{ picked: !c.color }"
+                  title="无色"
+                  @click.stop="emit('setColor', c, null)"
+                >×</button>
+              </div>
+            </template>
+            <span
+              class="color-dot"
+              :class="{ colored: !!c.color }"
+              :style="c.color ? { background: c.color } : undefined"
+              :title="c.color ? '更换颜色' : '设置颜色'"
+              @click.stop
+            ></span>
+          </a-popover>
           <span class="row-name">{{ c.name }}</span>
           <div class="row-actions">
             <button class="act-btn" title="重命名" @click.stop="emit('startEdit', c)">
@@ -178,7 +220,56 @@ watch(
   bottom: 8px;
   width: 3px;
   border-radius: 2px;
-  background: var(--color-primary);
+  /* 选中条优先用分类主题色（个性化），无色回落主色 */
+  background: var(--cat-color, var(--color-primary));
+}
+/* 分类色点：无色=空心灰环，有色=实心 */
+.color-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  border: 1.5px solid var(--border-base);
+  background: transparent;
+  cursor: pointer;
+  transition: transform var(--transition-fast);
+}
+.color-dot.colored {
+  border-color: transparent;
+}
+.color-dot:hover {
+  transform: scale(1.25);
+}
+/* 选色气泡（非 scoped 内容，落在 body 上） */
+:global(.cat-color-pop .swatch-grid) {
+  display: grid;
+  grid-template-columns: repeat(5, 24px);
+  gap: 6px;
+}
+:global(.cat-color-pop .swatch) {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: transform var(--transition-fast);
+}
+:global(.cat-color-pop .swatch:hover) {
+  transform: scale(1.15);
+}
+:global(.cat-color-pop .swatch.picked) {
+  border-color: var(--color-primary);
+}
+:global(.cat-color-pop .swatch-none) {
+  background: var(--bg-elevated);
+  border: 1.5px dashed var(--border-base);
+  color: var(--text-tertiary);
+  font-size: 13px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .row-icon {
   font-size: 14px;

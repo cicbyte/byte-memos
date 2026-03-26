@@ -1,17 +1,17 @@
 <script setup lang="ts">
 /**
- * 标签页 /tags（书签专用）
+ * 标签页 /tags（备忘录）
  *
- * 双栏布局：左侧标签云（字号按使用频率缩放） + 右侧选中标签的关联书签。
+ * 双栏布局：左侧标签云（字号按使用频率缩放） + 右侧选中标签的关联备忘录。
  */
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { TagsOutlined, LinkOutlined } from "@ant-design/icons-vue";
+import { TagsOutlined, FileTextOutlined } from "@ant-design/icons-vue";
 import EmptyState from "@/components/common/EmptyState.vue";
 import Panel from "@/components/shared/Panel.vue";
 import PreviewItem from "@/components/shared/PreviewItem.vue";
 import { api } from "@/api";
-import type { TagStat, Bookmark } from "@/api/types";
+import type { TagStat, Memo } from "@/api/types";
 import { useLayoutStore } from "@/stores/layout";
 
 const router = useRouter();
@@ -21,8 +21,8 @@ const tags = ref<TagStat[]>([]);
 const selectedTag = ref<string | null>(null);
 const loading = ref(false);
 
-/** 选中标签的关联书签 */
-const tagBookmarks = ref<Bookmark[]>([]);
+/** 选中标签的关联备忘录 */
+const tagMemos = ref<Memo[]>([]);
 const detailLoading = ref(false);
 
 const maxCount = computed(() => Math.max(1, ...tags.value.map((t) => t.count)));
@@ -34,7 +34,18 @@ function fontSize(count: number): string {
 }
 
 /** 关联总数 */
-const totalCount = computed(() => tagBookmarks.value.length);
+const totalCount = computed(() => tagMemos.value.length);
+
+/** Markdown → 纯文本摘要 */
+function excerpt(m: Memo, max = 80): string {
+  const text = m.content
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/[#>*_~`\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
 
 async function loadTags() {
   loading.value = true;
@@ -53,7 +64,7 @@ async function selectTag(name: string) {
   selectedTag.value = name;
   detailLoading.value = true;
   try {
-    tagBookmarks.value = await api.listBookmarks({ tag: name, limit: 100 });
+    tagMemos.value = await api.listMemos({ tag: name, limit: 100 });
   } finally {
     detailLoading.value = false;
   }
@@ -86,12 +97,12 @@ onMounted(loadTags);
           v-if="!tags.length && !loading"
           :icon="TagsOutlined"
           text="暂无标签"
-          hint="在书签页给书签添加标签"
+          hint="在备忘录编辑时添加标签"
         />
       </template>
     </Panel>
 
-    <!-- 右栏：关联书签 -->
+    <!-- 右栏：关联备忘录 -->
     <Panel>
       <template v-if="selectedTag" #head>
         <span class="head-title">#{{ selectedTag }}</span>
@@ -99,27 +110,27 @@ onMounted(loadTags);
       </template>
 
       <div v-if="selectedTag" class="detail-body">
-        <div v-if="tagBookmarks.length" class="rel-group">
+        <div v-if="tagMemos.length" class="rel-group">
           <div class="group-head">
-            <LinkOutlined class="group-icon bookmark" />
-            <span class="group-label">书签</span>
-            <span class="group-count">{{ tagBookmarks.length }}</span>
+            <FileTextOutlined class="group-icon memo" />
+            <span class="group-label">备忘录</span>
+            <span class="group-count">{{ tagMemos.length }}</span>
           </div>
           <PreviewItem
-            v-for="b in tagBookmarks"
-            :key="b.short_id"
-            :icon="LinkOutlined"
-            variant="bookmark"
-            :title="b.title || b.url"
-            :desc="b.url"
-            @click="router.push(`/bookmarks?id=${b.short_id}`)"
+            v-for="m in tagMemos"
+            :key="m.short_id"
+            :icon="FileTextOutlined"
+            variant="memo"
+            :title="m.title || '(无标题)'"
+            :desc="excerpt(m)"
+            @click="router.push(`/memos?id=${m.short_id}`)"
           />
         </div>
 
         <EmptyState
           v-if="!totalCount && !detailLoading"
           :icon="TagsOutlined"
-          text="无关联书签"
+          text="无关联备忘录"
           size="small"
           inline
         />
@@ -129,7 +140,7 @@ onMounted(loadTags);
         <EmptyState
           :icon="TagsOutlined"
           text="从左侧选择标签"
-          hint="查看该标签关联的书签"
+          hint="查看该标签关联的备忘录"
         />
       </template>
     </Panel>
@@ -204,7 +215,7 @@ onMounted(loadTags);
 .group-icon {
   font-size: 14px;
 }
-.group-icon.bookmark { color: var(--color-primary); }
+.group-icon.memo { color: var(--color-primary); }
 .group-label {
   font-size: 12px;
   font-weight: 600;

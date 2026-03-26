@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * byte-link Logo（书签旗帜 · 透明背景 · 动态着色）
+ * byte-memos Logo（备忘录笔记 · 透明背景 · 动态着色）
  *
- * 书签旗帜 + 顶部圆孔（吊牌感）：直接对应「书签管理」，
- * 圆孔同时呼应「环 / 链接」。轮廓简洁，小尺寸下仍有辨识度。
+ * 圆角笔记卡片 + 三条文字行镂空：直接对应「备忘录管理」，
+ * 轮廓简洁，小尺寸下仍有辨识度。
  *
  * 着色：SVG 用 fill="currentColor"，颜色由 CSS color 控制——
  *   - 不传 color：继承父元素文字色（浅主题自动深、深主题自动浅）
@@ -35,19 +35,25 @@ const maskId = `logo-mask-${useId()}`;
     :style="{ color }"
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
-    aria-label="byte-link"
+    aria-label="byte-memos"
     role="img"
   >
     <defs>
-      <!-- 书签顶部圆孔镂空 mask：白=保留，黑=挖空（透出背景） -->
+      <!-- 文字行镂空 mask：白=保留，黑=挖空（透出背景） -->
       <mask :id="maskId">
         <rect width="64" height="64" fill="white" />
-        <circle cx="32" cy="20" r="4.2" fill="black" />
+        <rect x="21" y="20" width="22" height="4" rx="2" fill="black" />
+        <rect x="21" y="30" width="22" height="4" rx="2" fill="black" />
+        <rect x="21" y="40" width="13" height="4" rx="2" fill="black" />
       </mask>
     </defs>
-    <!-- 书签旗帜（实色 + 顶部圆孔镂空；底部 V 形凹槽） -->
-    <path
-      d="M16 10 H48 V54 L32 44 L16 54 Z"
+    <!-- 备忘录卡片（圆角矩形 + 文字行镂空） -->
+    <rect
+      x="12"
+      y="8"
+      width="40"
+      height="48"
+      rx="8"
       fill="currentColor"
       :mask="`url(#${maskId})`"
     />
