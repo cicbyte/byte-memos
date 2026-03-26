@@ -39,6 +39,9 @@ enum Commands {
     /// 模板管理
     #[command(subcommand)]
     Template(cmd::TemplateCommand),
+    /// 附件管理
+    #[command(subcommand)]
+    Attachment(cmd::AttachmentCommand),
     /// 导出备份（zip 或目录快照）
     Backup(cmd::BackupArgs),
     /// 从备份恢复（覆盖当前数据）
@@ -83,6 +86,8 @@ fn main() -> anyhow::Result<()> {
                 cmd::MemoCommand::Relations(a) => cmd::run_memo_relations(a, cli.json).await,
                 cmd::MemoCommand::History(a) => cmd::run_memo_history(a, cli.json).await,
                 cmd::MemoCommand::RestoreVersion(a) => cmd::run_memo_restore_version(a, cli.json).await,
+                cmd::MemoCommand::ExportHtml(a) => cmd::run_memo_export_html(a, cli.json).await,
+                cmd::MemoCommand::ExportMd(a) => cmd::run_memo_export_md(a, cli.json).await,
             },
             Commands::Category(sub) => match sub {
                 cmd::CategoryCommand::List => cmd::run_category_list(cli.json).await,
@@ -103,6 +108,11 @@ fn main() -> anyhow::Result<()> {
                 cmd::TemplateCommand::Delete(a) => cmd::run_template_delete(cli.json, a).await,
                 cmd::TemplateCommand::Use(a) => cmd::run_template_use(cli.json, a).await,
                 cmd::TemplateCommand::SaveAs(a) => cmd::run_template_save_as(cli.json, a).await,
+            },
+            Commands::Attachment(sub) => match sub {
+                cmd::AttachmentCommand::Upload(a) => cmd::run_attachment_upload(cli.json, a).await,
+                cmd::AttachmentCommand::List(a) => cmd::run_attachment_list(cli.json, a).await,
+                cmd::AttachmentCommand::Delete(a) => cmd::run_attachment_delete(cli.json, a).await,
             },
             Commands::Backup(a) => cmd::run_backup(a, cli.json).await,
             Commands::Restore(a) => cmd::run_restore(a, cli.json).await,

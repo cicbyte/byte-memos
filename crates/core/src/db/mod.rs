@@ -16,6 +16,7 @@ mod memos;
 mod relations;
 mod versions;
 pub mod templates;
+pub mod attachments;
 
 #[cfg(test)]
 mod tests;

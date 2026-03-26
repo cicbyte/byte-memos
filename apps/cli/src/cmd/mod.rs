@@ -9,16 +9,17 @@ mod category;
 mod server;
 mod tags;
 mod templates;
+mod attachments;
 
 // ---- 备份 / 恢复 ----
 pub use backup::{BackupArgs, RestoreArgs, run_backup, run_restore};
 
 // ---- memo 子命令（byte-memos 核心领域）----
 pub use memos::{
-    MemoCommand, run_memo_add, run_memo_delete, run_memo_get, run_memo_history,
-    run_memo_link, run_memo_list, run_memo_pin, run_memo_relations,
-    run_memo_restore_version, run_memo_search, run_memo_tag, run_memo_unlink,
-    run_memo_update, run_memo_visibility,
+    MemoCommand, run_memo_add, run_memo_delete, run_memo_export_html, run_memo_export_md,
+    run_memo_get, run_memo_history, run_memo_link, run_memo_list, run_memo_pin,
+    run_memo_relations, run_memo_restore_version, run_memo_search, run_memo_tag,
+    run_memo_unlink, run_memo_update, run_memo_visibility,
 };
 
 // ---- category 子命令 ----
@@ -34,6 +35,11 @@ pub use tags::{TagCommand, run_tag_list, run_tag_set_color, run_tag_delete};
 pub use templates::{
     TemplateCommand, run_template_create, run_template_delete, run_template_list,
     run_template_save_as, run_template_use,
+};
+
+// ---- attachment 子命令 ----
+pub use attachments::{
+    AttachmentCommand, run_attachment_delete, run_attachment_list, run_attachment_upload,
 };
 
 // ---- MCP / REST API 服务 ----

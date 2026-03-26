@@ -39,6 +39,10 @@ pub enum MemoCommand {
     History(MemoHistoryArgs),
     /// 回滚到指定版本
     RestoreVersion(MemoRestoreVersionArgs),
+    /// 导出笔记为 HTML（可用浏览器打印为 PDF）
+    ExportHtml(MemoExportArgs),
+    /// 导出笔记为 Markdown
+    ExportMd(MemoExportArgs),
 }
 
 #[derive(Args, Debug)]
@@ -181,6 +185,15 @@ pub struct MemoRestoreVersionArgs {
     pub short_id: String,
     /// 版本ID
     pub version_id: i64,
+}
+
+#[derive(Args, Debug)]
+pub struct MemoExportArgs {
+    /// 备忘录 shortId
+    pub short_id: String,
+    /// 输出文件路径（可选，默认输出到 stdout）
+    #[arg(long, short)]
+    pub output: Option<String>,
 }
 
 pub async fn run_memo_add(args: MemoAddArgs, json: bool) -> anyhow::Result<()> {
@@ -416,6 +429,36 @@ pub async fn run_memo_restore_version(args: MemoRestoreVersionArgs, json: bool) 
         println!("{}", serde_json::to_string(&m)?);
     } else {
         println!("⏪ 已回滚到版本 {}：{}", args.version_id, m.short_id);
+    }
+    Ok(())
+}
+
+pub async fn run_memo_export_html(args: MemoExportArgs, json: bool) -> anyhow::Result<()> {
+    let svc = open_service(json)?;
+    let html = svc.export_memo_html(&args.short_id)?;
+    
+    if let Some(output) = &args.output {
+        std::fs::write(output, &html)?;
+        if !json {
+            println!("✅ 已导出 HTML 到：{}", output);
+        }
+    } else {
+        println!("{}", html);
+    }
+    Ok(())
+}
+
+pub async fn run_memo_export_md(args: MemoExportArgs, json: bool) -> anyhow::Result<()> {
+    let svc = open_service(json)?;
+    let md = svc.export_memo_markdown(&args.short_id)?;
+    
+    if let Some(output) = &args.output {
+        std::fs::write(output, &md)?;
+        if !json {
+            println!("✅ 已导出 Markdown 到：{}", output);
+        }
+    } else {
+        println!("{}", md);
     }
     Ok(())
 }

@@ -23,6 +23,8 @@ mod memos;
 mod relations;
 mod versions;
 mod templates;
+mod attachments;
+mod export;
 mod trash;
 
 // open_at 与顶层配置函数调用的 config_backup 内部 helper（对 service 可见）
