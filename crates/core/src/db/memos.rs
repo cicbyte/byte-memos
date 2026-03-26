@@ -1,7 +1,7 @@
 //! 备忘录（memos）的 CRUD、过滤列表、FTS 同步、回收站。
 //!
-//! 与 bookmarks 的差异：content 直接存 DB（不落盘），故 FTS 用 `INSERT ... SELECT`
-//! 直接同步 DB 列，service 层无需读写内容文件。short_id 去重由部分唯一索引保证。
+//! content 直接存 DB，FTS 用 `INSERT ... SELECT` 直接同步 DB 列。
+//! short_id 去重由部分唯一索引保证。
 
 use rusqlite::{params, Connection, OptionalExtension};
 

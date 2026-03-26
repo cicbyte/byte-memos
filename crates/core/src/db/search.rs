@@ -159,4 +159,65 @@ impl Database {
         let end = (start + limit as usize).min(hits.len());
         Ok(hits[start..end].to_vec())
     }
+
+    // ============ 正则表达式搜索 ============
+
+    /// 正则表达式搜索（在 Rust 中做正则匹配）
+    ///
+    /// 在 title 和 content 字段上执行正则匹配，返回匹配的笔记。
+    pub fn search_regex(&self, pattern: &str, limit: i64, offset: i64) -> CoreResult<Vec<SearchHit>> {
+        // 验证正则表达式是否有效
+        let re = regex::Regex::new(pattern)
+            .map_err(|e| crate::CoreError::Other(anyhow::anyhow!("无效的正则表达式：{e}")))?;
+
+        let conn = self.lock()?;
+        // 先获取所有活跃笔记
+        let mut stmt = conn.prepare(
+            "SELECT m.short_id, m.title, m.content,
+                    (SELECT COALESCE(group_concat(t.name, ', '),'')
+                       FROM memo_tag mt JOIN tags t ON t.id = mt.tag_id
+                       WHERE mt.memo_id = m.short_id) AS tags_str
+             FROM memo m
+             WHERE m.deleted_at IS NULL
+             ORDER BY m.updated_at DESC",
+        )?;
+
+        let mut hits = Vec::new();
+        let rows = stmt.query_map([], |r| {
+            let short_id: String = r.get(0)?;
+            let title: String = r.get::<_, Option<String>>(1)?.unwrap_or_default();
+            let content: String = r.get::<_, Option<String>>(2)?.unwrap_or_default();
+            let tags_str: String = r.get::<_, Option<String>>(3)?.unwrap_or_default();
+            let matched_tags: Vec<String> = if tags_str.is_empty() {
+                Vec::new()
+            } else {
+                tags_str.split(", ").map(|s| s.to_string()).collect()
+            };
+            Ok((short_id, title, content, matched_tags))
+        })?;
+
+        for row in rows {
+            let (short_id, title, content, matched_tags) = row?;
+            // 在 Rust 中做正则匹配
+            if re.is_match(&title) || re.is_match(&content) {
+                let snippet = if content.len() > 200 {
+                    format!("{}...", &content[..200])
+                } else {
+                    content
+                };
+                hits.push(SearchHit {
+                    short_id,
+                    title,
+                    snippet,
+                    rank: 0.0,
+                    matched_tags,
+                });
+            }
+        }
+
+        // 分页
+        let start = (offset.max(0) as usize).min(hits.len());
+        let end = (start + limit as usize).min(hits.len());
+        Ok(hits[start..end].to_vec())
+    }
 }

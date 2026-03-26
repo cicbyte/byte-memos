@@ -9,7 +9,7 @@ pub(super) async fn swagger_ui() -> impl IntoResponse {
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>byte-link REST API</title>
+  <title>byte-memos REST API</title>
   <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
   <style>body { margin: 0; }</style>
 </head>
@@ -40,9 +40,9 @@ pub(super) async fn openapi_spec() -> impl IntoResponse {
     let spec = serde_json::json!({
         "openapi": "3.0.3",
         "info": {
-            "title": "byte-link REST API",
+            "title": "byte-memos REST API",
             "version": env!("CARGO_PKG_VERSION"),
-            "description": "byte-link REST API — 备忘录的 CRUD + 搜索 + 分类标签 + 回收站"
+            "description": "byte-memos REST API — 备忘录的 CRUD + 搜索 + 分类标签 + 回收站"
         },
         "components": {
             "securitySchemes": {

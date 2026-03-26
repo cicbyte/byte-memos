@@ -117,8 +117,11 @@ pub struct MemoDeleteArgs {
 
 #[derive(Args, Debug)]
 pub struct MemoSearchArgs {
-    /// 搜索词
+    /// 搜索词（或正则表达式，配合 --regex 使用）
     pub query: String,
+    /// 使用正则表达式搜索
+    #[arg(long)]
+    pub regex: bool,
     #[arg(long, default_value = "20")]
     pub limit: i64,
     #[arg(long, default_value = "0")]
@@ -303,8 +306,13 @@ pub async fn run_memo_delete(args: MemoDeleteArgs, json: bool) -> anyhow::Result
 
 pub async fn run_memo_search(args: MemoSearchArgs, json: bool) -> anyhow::Result<()> {
     let svc = open_service(json)?;
-    let hits = svc.search_memos(&args.query, args.limit, args.offset)?;
-    format::print_memo_search(&hits, json);
+    if args.regex {
+        let hits = svc.search_regex(&args.query, args.limit, args.offset)?;
+        format::print_search_hits(&hits, json);
+    } else {
+        let hits = svc.search_memos(&args.query, args.limit, args.offset)?;
+        format::print_memo_search(&hits, json);
+    }
     Ok(())
 }
 

@@ -154,7 +154,7 @@ impl ServerHandler for ByteLinkMcpServer {
         .with_server_info(Implementation::from_build_env())
         .with_protocol_version(ProtocolVersion::V_2024_11_05)
         .with_instructions(
-            "byte-link 本地备忘录库。5 个工具：\n\
+            "byte-memos 本地备忘录库。5 个工具：\n\
              search(query, type, limit, offset) — 搜索，type: memo/all\n\
              list(type, limit, offset) — 列出，type: memo/tag/category\n\
              get(short_id, type) — 读取备忘录详情\n\

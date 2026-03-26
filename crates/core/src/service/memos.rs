@@ -1,7 +1,6 @@
 //! 备忘录（memos）：CRUD、列表、置顶、可见性、回收站、搜索。
 //!
-//! 与 bookmarks 的差异：content 直接存 DB（不落盘），无 favicon，
-//! FTS 由 db 层 `sync_memo_fts` 直接同步 DB 列。visibility 可切换。
+//! 笔记内容直接存 DB，FTS 由 db 层 `sync_memo_fts` 直接同步。visibility 可切换。
 
 use super::*;
 

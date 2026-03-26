@@ -10,7 +10,7 @@
 mod memos;
 mod misc;
 
-pub use memos::{print_memo, print_memo_search, print_memos};
+pub use memos::{print_memo, print_memo_search, print_memos, print_search_hits};
 pub use misc::print_categories;
 
 // ===== ANSI 颜色（子模块复用）=====

@@ -18,6 +18,13 @@ impl super::ProjectService {
         self.db.search_all(query, limit, offset)
     }
 
+    /// 正则表达式搜索
+    ///
+    /// 使用正则表达式在标题和内容中搜索。
+    pub fn search_regex(&self, pattern: &str, limit: i64, offset: i64) -> CoreResult<Vec<SearchHit>> {
+        self.db.search_regex(pattern, limit, offset)
+    }
+
     // ============ 统计 ============
 
     /// 统计概览（笔记维度 + 共享的标签/分类/存储/置顶/回收站计数）

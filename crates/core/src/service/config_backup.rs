@@ -27,7 +27,7 @@ impl super::ProjectService {
             let zip_path = if dest.extension().and_then(|e| e.to_str()) == Some("zip") {
                 dest
             } else {
-                dest.join(format!("{timestamp}-byte-link-backup.zip"))
+                dest.join(format!("{timestamp}-byte-memos-backup.zip"))
             };
             if let Some(parent) = zip_path.parent() {
                 std::fs::create_dir_all(parent)?;
@@ -281,7 +281,7 @@ fn replace_dir(src: &Path, dst: &Path) -> CoreResult<()> {
         }
         if let Some(msg) = last_err {
             return Err(CoreError::Other(anyhow::anyhow!(
-                "{msg}，文件可能被占用。请关闭正在运行的 byte-link 后重试。"
+                "{msg}，文件可能被占用。请关闭正在运行的 byte-memos 后重试。"
             )));
         }
     }

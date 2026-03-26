@@ -1,6 +1,6 @@
 //! 备忘录输出：详情 / 列表
 
-use byte_memos_core::model::{Memo, MemoSearchHit};
+use byte_memos_core::model::{Memo, MemoSearchHit, SearchHit};
 
 use super::{paint, truncate, pad, BOLD, GRAY, CYAN, BLUE, GREEN, YELLOW, RESET};
 
@@ -99,6 +99,36 @@ pub fn print_memo_search(hits: &[MemoSearchHit], json: bool) {
                     .replace("</mark>", RESET);
                 println!("    {pretty}");
             }
+        }
+    }
+    println!("{}", paint(GRAY, &format!("共 {} 项命中", hits.len())));
+}
+
+pub fn print_search_hits(hits: &[SearchHit], json: bool) {
+    if json {
+        println!("{}", serde_json::to_string_pretty(hits).unwrap());
+        return;
+    }
+    if hits.is_empty() {
+        println!("{}", paint(GRAY, "（无匹配）"));
+        return;
+    }
+    for h in hits {
+        println!(
+            "{} {}",
+            paint(CYAN, &h.short_id),
+            paint(BOLD, &h.title),
+        );
+        if !h.snippet.is_empty() {
+            let preview = truncate(&h.snippet, 100);
+            println!("    {preview}");
+        }
+        if !h.matched_tags.is_empty() {
+            let tags = h.matched_tags.iter()
+                .map(|t| paint(BLUE, &format!("#{t}")))
+                .collect::<Vec<_>>()
+                .join(" ");
+            println!("    {tags}");
         }
     }
     println!("{}", paint(GRAY, &format!("共 {} 项命中", hits.len())));
