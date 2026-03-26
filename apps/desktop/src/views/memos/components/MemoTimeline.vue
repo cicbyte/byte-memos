@@ -138,7 +138,7 @@ function dotColor(m: Memo): string {
 
 <style scoped>
 .memo-timeline {
-  max-width: 860px;
+  width: 100%; /* 列宽由父级 .flow 统一约束（780px 阅读列） */
 }
 
 .tl-group {
@@ -196,7 +196,7 @@ function dotColor(m: Memo): string {
   transition: background var(--transition-fast);
 }
 .tl-entry:hover {
-  background: var(--color-hover);
+  background: color-mix(in srgb, var(--color-primary) 4%, transparent);
 }
 
 .tl-dot {
@@ -261,10 +261,12 @@ function dotColor(m: Memo): string {
   display: flex;
   gap: 2px;
   opacity: 0;
-  transition: opacity var(--transition-fast);
+  transform: translateX(4px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
 }
 .tl-entry:hover .tl-ops {
   opacity: 1;
+  transform: translateX(0);
 }
 .tl-op {
   display: grid;
@@ -275,13 +277,13 @@ function dotColor(m: Memo): string {
   color: var(--text-tertiary);
   background: transparent;
   border: none;
-  border-radius: var(--radius-xs);
+  border-radius: 999px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 .tl-op:hover {
   color: var(--text-primary);
-  background: var(--bg-input);
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
 }
 .tl-op.on {
   color: var(--color-primary);

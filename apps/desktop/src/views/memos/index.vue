@@ -16,22 +16,21 @@ import {
   PushpinOutlined,
   EditOutlined,
   DeleteOutlined,
-  EyeOutlined,
-  LockOutlined,
   SearchOutlined,
   AppstoreOutlined,
-  UnorderedListOutlined,
   HistoryOutlined,
   DownloadOutlined,
   CalendarOutlined,
   FieldTimeOutlined,
   PaperClipOutlined,
   UploadOutlined,
+  ExpandOutlined,
+  SendOutlined,
 } from "@ant-design/icons-vue";
 import { message, Modal } from "ant-design-vue";
 import "md-editor-v3/lib/style.css";
 import { api } from "@/api";
-import type { AttachmentInfo, Category, DailyCount, Memo, MemoVersionInfo } from "@/api/types";
+import type { AttachmentInfo, Category, DailyCount, Memo, MemoVersionInfo, TagStat } from "@/api/types";
 import { attachmentObjectUrl, revokeAttachmentUrl, isImageMime, fmtSize } from "@/api/attachments";
 import { useThemeStore } from "@/stores/theme";
 import { useLayoutStore } from "@/stores/layout";
@@ -49,18 +48,18 @@ const route = useRoute();
 
 const memos = ref<Memo[]>([]);
 const categories = ref<Category[]>([]);
-const allTags = ref<string[]>([]);
+const allTags = ref<TagStat[]>([]);
 const loading = ref(false);
 
 const searchQuery = ref("");
 const filterCat = ref<string>("");
 const filterTag = ref<string>("");
 
-/** 视图模式：list（行）/ card（网格）/ timeline（时间轴）/ calendar（日历），localStorage 持久化 */
-const viewMode = ref<"list" | "card" | "timeline" | "calendar">(
-  (localStorage.getItem("memo-view-mode") as "list" | "card" | "timeline" | "calendar") || "list",
+/** 主区流形态：timeline（默认）/ card，localStorage 持久化（兼容旧四态值） */
+const viewMode = ref<"timeline" | "card">(
+  localStorage.getItem("memo-view-mode") === "card" ? "card" : "timeline",
 );
-function setView(m: "list" | "card" | "timeline" | "calendar") {
+function setView(m: "timeline" | "card") {
   viewMode.value = m;
   localStorage.setItem("memo-view-mode", m);
 }
@@ -105,6 +104,100 @@ async function loadAttachMap() {
 }
 function attachCount(m: Memo): number {
   return attachMap.value.get(m.short_id)?.length || 0;
+}
+
+// ===== 左栏：标签筛选 + 统计 =====
+
+function toggleTagFilter(tag: string) {
+  filterTag.value = filterTag.value === tag ? "" : tag;
+}
+
+const todayKeyStr = (() => {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+})();
+const monthPrefix = todayKeyStr.slice(0, 7);
+
+const todayCount = computed(() => dailyCounts.value[todayKeyStr] || 0);
+const monthCount = computed(() => {
+  let sum = 0;
+  for (const [date, c] of Object.entries(dailyCounts.value)) {
+    if (date.startsWith(monthPrefix)) sum += c;
+  }
+  return sum;
+});
+
+// ===== 顶部固定快速输入 =====
+
+const quickText = ref("");
+const savingQuick = ref(false);
+
+/** 首行 ≤40 字取作标题，余下为正文；首行过长则整体作正文、截断作标题 */
+function splitQuick(raw: string): { title: string; body: string } {
+  const lines = raw.replace(/\r/g, "").split("\n");
+  const first = (lines[0] || "").trim();
+  if (first.length > 0 && first.length <= 40) {
+    const rest = lines.slice(1).join("\n").trim();
+    return { title: first, body: rest || first };
+  }
+  return { title: first.slice(0, 40) || "无标题", body: raw };
+}
+
+async function submitQuick() {
+  const raw = quickText.value.trim();
+  if (!raw || savingQuick.value) return;
+  savingQuick.value = true;
+  try {
+    const { title, body } = splitQuick(raw);
+    const created = await api.addMemo({
+      title,
+      content: body,
+      visibility: "PRIVATE",
+      category: filterCat.value || null,
+      tags: filterTag.value ? [filterTag.value] : [],
+    });
+    memos.value = [created, ...memos.value];
+    quickText.value = "";
+    message.success("已记下");
+    loadDailyCounts();
+    updateFooter();
+  } catch {
+    message.error("保存失败");
+  } finally {
+    savingQuick.value = false;
+  }
+}
+
+function onQuickKey(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+    e.preventDefault();
+    submitQuick();
+  }
+}
+
+/** 快速输入 → 完整编辑抽屉（预填，可补分类/标签/附件） */
+function expandQuick() {
+  const raw = quickText.value;
+  const parts = raw.trim() ? splitQuick(raw) : { title: "", body: "" };
+  editing.value = null;
+  form.value = {
+    title: parts.title === "无标题" ? "" : parts.title,
+    content: parts.body,
+    category: filterCat.value || undefined,
+    tags: filterTag.value ? [filterTag.value] : [],
+    visibility: "PRIVATE",
+    pinned: false,
+  };
+  loadTags();
+  drawerOpen.value = true;
+}
+
+function clearFilters() {
+  searchQuery.value = "";
+  filterCat.value = "";
+  filterTag.value = "";
+  filterDate.value = null;
 }
 
 // 新增/编辑抽屉
@@ -302,7 +395,7 @@ async function exportMemo(m: Memo, format: "markdown" | "html") {
 
 async function loadTags() {
   try {
-    allTags.value = (await api.tagStats(200)).map((t) => t.tag);
+    allTags.value = await api.tagStats(200);
   } catch {
     allTags.value = [];
   }
@@ -484,157 +577,134 @@ onMounted(load);
           </a-select-option>
         </a-select>
 
-        <a-select
-          v-model:value="filterTag"
-          size="small"
-          style="width: 120px"
-          placeholder="全部标签"
-          allow-clear
-          @change="load"
-        >
-          <a-select-option value="">全部标签</a-select-option>
-          <a-select-option v-for="t in allTags" :key="t" :value="t">#{{ t }}</a-select-option>
-        </a-select>
-
-        <a-tag v-if="filterDate" class="date-chip" closable @close="filterDate = null">
-          <CalendarOutlined /> {{ filterDate }}
-        </a-tag>
-
         <div class="view-toggle">
-          <button class="vt-btn" :class="{ on: viewMode === 'list' }" title="列表视图" @click="setView('list')">
-            <UnorderedListOutlined />
-          </button>
-          <button class="vt-btn" :class="{ on: viewMode === 'card' }" title="卡片视图" @click="setView('card')">
-            <AppstoreOutlined />
-          </button>
-          <button class="vt-btn" :class="{ on: viewMode === 'timeline' }" title="时间轴视图" @click="setView('timeline')">
+          <button class="vt-btn" :class="{ on: viewMode === 'timeline' }" title="时间轴" @click="setView('timeline')">
             <FieldTimeOutlined />
           </button>
-          <button class="vt-btn" :class="{ on: viewMode === 'calendar' }" title="日历视图" @click="setView('calendar')">
-            <CalendarOutlined />
+          <button class="vt-btn" :class="{ on: viewMode === 'card' }" title="卡片网格" @click="setView('card')">
+            <AppstoreOutlined />
           </button>
         </div>
 
         <div class="head-actions">
           <button class="icon-action" title="刷新" @click="load"><ReloadOutlined /></button>
-          <button class="icon-action primary" title="新增备忘录" @click="openAdd"><PlusOutlined /></button>
+          <button class="icon-action primary" title="完整新建（分类/标签/附件）" @click="openAdd"><PlusOutlined /></button>
         </div>
       </header>
 
-      <div class="panel-body">
-        <div v-if="loading" class="memo-empty">加载中…</div>
-        <div v-else-if="!filtered.length" class="memo-empty">
-          {{ searchQuery || filterCat || filterTag || filterDate ? "无匹配备忘录" : "暂无备忘录 — 点 + 新建第一篇" }}
-        </div>
+      <div class="panel-layout">
+        <!-- 左栏：日历 + 标签 + 统计 -->
+        <aside class="side">
+          <MemoCalendar :counts="dailyCounts" :selected="filterDate" @select="filterDate = $event" />
 
-        <!-- 日历视图：月历热力 + 当日列表 -->
-        <div v-else-if="viewMode === 'calendar'" class="cal-layout">
-          <div class="cal-side">
-            <MemoCalendar :counts="dailyCounts" :selected="filterDate" @select="filterDate = $event" />
-          </div>
-          <div class="cal-day-panel">
-            <div class="cal-day-title">
-              {{ filterDate ? `${filterDate} · ${filtered.length} 条` : "未选择日期 — 点左侧日历" }}
+          <div class="side-section">
+            <div class="side-title">标签</div>
+            <div class="tag-cloud">
+              <button
+                v-for="t in allTags.slice(0, 40)"
+                :key="t.tag"
+                class="tag-chip"
+                :class="{ on: filterTag === t.tag }"
+                :title="`按 #${t.tag} 筛选（${t.count} 条）`"
+                @click="toggleTagFilter(t.tag)"
+              >
+                <span class="tag-name">#{{ t.tag }}</span>
+                <span class="tag-count">{{ t.count }}</span>
+              </button>
+              <span v-if="!allTags.length" class="side-empty">暂无标签</span>
             </div>
-            <div v-if="!filterDate" class="cal-day-empty">选中日期后在此查看当日备忘录</div>
-            <div v-else class="cal-day-list">
-              <div v-for="m in filtered" :key="m.short_id" class="cal-day-item" @click="openEdit(m)">
-                <span class="cal-item-time">{{ fmtDate(m.created_at).slice(11, 16) }}</span>
-                <div class="cal-item-main">
-                  <span class="cal-item-title">{{ m.title || "无标题" }}</span>
-                  <span class="cal-item-excerpt">{{ excerpt(m, 80) }}</span>
+          </div>
+
+          <div class="side-section side-stats">
+            <div class="stat-line"><span>今日</span><b>{{ todayCount }}</b></div>
+            <div class="stat-line"><span>本月</span><b>{{ monthCount }}</b></div>
+            <div class="stat-line"><span>累计</span><b>{{ memos.length }}</b></div>
+          </div>
+        </aside>
+
+        <!-- 主区：固定快速输入 + 筛选 chips + memo 流 -->
+        <div class="main-col">
+          <div class="composer">
+            <textarea
+              v-model="quickText"
+              rows="2"
+              placeholder="记点什么…（Markdown · Ctrl+Enter 直接记下）"
+              @keydown="onQuickKey"
+            />
+            <div class="composer-foot">
+              <span class="composer-hint">首行自动作标题 · 展开可加分类/标签/附件</span>
+              <div class="composer-actions">
+                <button class="composer-btn" title="完整编辑" @click="expandQuick">
+                  <ExpandOutlined /> 展开
+                </button>
+                <button class="composer-send" :disabled="!quickText.trim() || savingQuick" @click="submitQuick">
+                  <SendOutlined /> {{ savingQuick ? "记下…" : "记下" }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="filterDate || filterTag || filterCat || searchQuery.trim()" class="chips-row">
+            <a-tag v-if="filterDate" closable @close="filterDate = null"><CalendarOutlined /> {{ filterDate }}</a-tag>
+            <a-tag v-if="filterTag" closable @close="filterTag = ''">#{{ filterTag }}</a-tag>
+            <a-tag v-if="filterCat" closable @close="filterCat = ''">{{ filterCat }}</a-tag>
+            <a-tag v-if="searchQuery.trim()" closable @close="searchQuery = ''">「{{ searchQuery.trim() }}」</a-tag>
+            <a-tag class="chip-clear" @click="clearFilters">清空筛选</a-tag>
+          </div>
+
+          <div class="flow">
+            <div v-if="loading" class="memo-empty">加载中…</div>
+            <div v-else-if="!memos.length" class="memo-empty hero-empty">
+              <EditOutlined class="empty-icon" />
+              <p class="empty-title">还没有备忘录</p>
+              <p class="empty-sub">在上面记下第一笔 · Ctrl+Enter 秒记</p>
+            </div>
+            <div v-else-if="!filtered.length" class="memo-empty">无匹配备忘录 — 试试清空筛选</div>
+
+            <!-- 时间轴流（默认） -->
+            <MemoTimeline
+              v-else-if="viewMode === 'timeline'"
+              :memos="filtered"
+              :cat-color-map="catColorMap"
+              @open="openEdit"
+              @pin="togglePin"
+              @del="remove"
+            />
+
+            <!-- 卡片网格 -->
+            <div v-else class="memo-grid">
+              <div v-for="m in filtered" :key="m.short_id" class="memo-card" @click="openEdit(m)">
+                <div class="memo-card-head">
+                  <span class="memo-card-title">{{ m.title || "无标题" }}</span>
+                  <PushpinFilled v-if="m.pinned" class="memo-pin-mark" />
                 </div>
-                <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'" class="cal-item-cat">
-                  {{ m.category }}
-                </a-tag>
+                <div class="memo-card-excerpt">{{ excerpt(m, 120) }}</div>
+                <div class="memo-card-meta">
+                  <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'">{{ m.category }}</a-tag>
+                  <a-tag v-for="t in m.tags.slice(0, 3)" :key="t">#{{ t }}</a-tag>
+                  <span v-if="attachCount(m)" class="attach-badge" title="附件数">
+                    <PaperClipOutlined /> {{ attachCount(m) }}
+                  </span>
+                  <span class="memo-time">{{ fmtDate(m.updated_at) }}</span>
+                </div>
+                <div class="memo-ops memo-card-ops">
+                  <button class="op-btn" :class="{ on: m.pinned }" title="置顶/取消置顶" @click.stop="togglePin(m)">
+                    <PushpinFilled v-if="m.pinned" /><PushpinOutlined v-else />
+                  </button>
+                  <button class="op-btn" title="编辑" @click.stop="openEdit(m)"><EditOutlined /></button>
+                  <button class="op-btn" title="版本历史" @click.stop="openHistory(m)"><HistoryOutlined /></button>
+                  <a-dropdown :trigger="['click']">
+                    <button class="op-btn" title="导出" @click.stop><DownloadOutlined /></button>
+                    <template #overlay>
+                      <a-menu @click="({ key }: any) => exportMemo(m, key as 'markdown' | 'html')">
+                        <a-menu-item key="markdown">Markdown（.md）</a-menu-item>
+                        <a-menu-item key="html">HTML（.html）</a-menu-item>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
+                  <button class="op-btn danger" title="删除" @click.stop="remove(m)"><DeleteOutlined /></button>
+                </div>
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 时间轴视图：日期分组纵向轨道 -->
-        <div v-else-if="viewMode === 'timeline'" class="tl-wrap">
-          <MemoTimeline
-            :memos="filtered"
-            :cat-color-map="catColorMap"
-            @open="openEdit"
-            @pin="togglePin"
-            @del="remove"
-          />
-        </div>
-
-        <!-- 列表视图 -->
-        <div v-else-if="viewMode === 'list'" class="memo-list">
-          <div v-for="m in filtered" :key="m.short_id" class="memo-item" @click="openEdit(m)">
-            <div class="memo-main">
-              <div class="memo-title-line">
-                <PushpinFilled v-if="m.pinned" class="memo-pin-mark" />
-                <span class="memo-title">{{ m.title || "无标题" }}</span>
-                <EyeOutlined v-if="m.visibility === 'PUBLIC'" class="memo-vis-mark" title="公开" />
-                <LockOutlined v-else-if="m.visibility === 'PROTECTED'" class="memo-vis-mark" title="受保护" />
-              </div>
-              <div class="memo-excerpt">{{ excerpt(m) }}</div>
-              <div class="memo-meta">
-                <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'">{{ m.category }}</a-tag>
-                <a-tag v-for="t in m.tags" :key="t">#{{ t }}</a-tag>
-                <span v-if="attachCount(m)" class="attach-badge" title="附件数">
-                  <PaperClipOutlined /> {{ attachCount(m) }}
-                </span>
-                <span class="memo-time">更新于 {{ fmtDate(m.updated_at) }}</span>
-              </div>
-            </div>
-            <div class="memo-ops">
-              <button class="op-btn" :class="{ on: m.pinned }" title="置顶/取消置顶" @click.stop="togglePin(m)">
-                <PushpinFilled v-if="m.pinned" /><PushpinOutlined v-else />
-              </button>
-              <button class="op-btn" title="编辑" @click.stop="openEdit(m)"><EditOutlined /></button>
-              <button class="op-btn" title="版本历史" @click.stop="openHistory(m)"><HistoryOutlined /></button>
-              <a-dropdown :trigger="['click']">
-                <button class="op-btn" title="导出" @click.stop><DownloadOutlined /></button>
-                <template #overlay>
-                  <a-menu @click="({ key }: any) => exportMemo(m, key as 'markdown' | 'html')">
-                    <a-menu-item key="markdown">Markdown（.md）</a-menu-item>
-                    <a-menu-item key="html">HTML（.html）</a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-              <button class="op-btn danger" title="删除" @click.stop="remove(m)"><DeleteOutlined /></button>
-            </div>
-          </div>
-        </div>
-
-        <!-- 卡片视图 -->
-        <div v-else class="memo-grid">
-          <div v-for="m in filtered" :key="m.short_id" class="memo-card" @click="openEdit(m)">
-            <div class="memo-card-head">
-              <span class="memo-card-title">{{ m.title || "无标题" }}</span>
-              <PushpinFilled v-if="m.pinned" class="memo-pin-mark" />
-            </div>
-            <div class="memo-card-excerpt">{{ excerpt(m, 120) }}</div>
-            <div class="memo-card-meta">
-              <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'">{{ m.category }}</a-tag>
-              <a-tag v-for="t in m.tags.slice(0, 3)" :key="t">#{{ t }}</a-tag>
-              <span v-if="attachCount(m)" class="attach-badge" title="附件数">
-                <PaperClipOutlined /> {{ attachCount(m) }}
-              </span>
-              <span class="memo-time">{{ fmtDate(m.updated_at) }}</span>
-            </div>
-            <div class="memo-ops memo-card-ops">
-              <button class="op-btn" :class="{ on: m.pinned }" title="置顶/取消置顶" @click.stop="togglePin(m)">
-                <PushpinFilled v-if="m.pinned" /><PushpinOutlined v-else />
-              </button>
-              <button class="op-btn" title="编辑" @click.stop="openEdit(m)"><EditOutlined /></button>
-              <button class="op-btn" title="版本历史" @click.stop="openHistory(m)"><HistoryOutlined /></button>
-              <a-dropdown :trigger="['click']">
-                <button class="op-btn" title="导出" @click.stop><DownloadOutlined /></button>
-                <template #overlay>
-                  <a-menu @click="({ key }: any) => exportMemo(m, key as 'markdown' | 'html')">
-                    <a-menu-item key="markdown">Markdown（.md）</a-menu-item>
-                    <a-menu-item key="html">HTML（.html）</a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-              <button class="op-btn danger" title="删除" @click.stop="remove(m)"><DeleteOutlined /></button>
             </div>
           </div>
         </div>
@@ -703,7 +773,7 @@ onMounted(load);
             mode="tags"
             style="min-width: 220px; flex: 1"
             placeholder="标签（回车确认，支持 a/b 层级）"
-            :options="allTags.map((t) => ({ value: t }))"
+            :options="allTags.map((t) => ({ value: t.tag }))"
           />
         </div>
 
@@ -881,12 +951,226 @@ onMounted(load);
   opacity: 0.85;
 }
 
-/* ===== 列表 ===== */
-.panel-body {
+/* ===== 三区布局：左栏（日历/标签/统计）+ 主区（输入/流） ===== */
+.panel-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+}
+
+.side {
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border-right: 1px solid var(--border-light);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.side-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.side-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-tertiary);
+}
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.tag-chip:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+.tag-chip.on {
+  color: var(--hero-cta-text, #fff);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.tag-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
+}
+.tag-chip.on .tag-count {
+  color: color-mix(in srgb, var(--hero-cta-text, #fff) 75%, transparent);
+}
+.side-empty {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+.side-stats {
+  margin-top: auto;
+  border-top: 1px dashed var(--border-light);
+  padding-top: 10px;
+  gap: 6px;
+}
+.stat-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.stat-line b {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.main-col {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px 8px;
+}
+
+/* ===== 顶部固定快速输入（与流区同轴的固定列宽） ===== */
+.composer {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 10px 12px 8px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.composer:focus-within {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+.composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  max-height: 150px;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  font-family: inherit;
+}
+.composer textarea::placeholder {
+  color: var(--text-tertiary);
+}
+.composer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+.composer-hint {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
+.composer-actions {
+  display: flex;
+  gap: 6px;
+}
+.composer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.composer-btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+.composer-send {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--hero-cta-text, #fff);
+  background: var(--color-primary);
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+.composer-send:hover {
+  opacity: 0.88;
+}
+.composer-send:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ===== 筛选 chips ===== */
+.chips-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+}
+.chips-row :deep(.ant-tag) {
+  margin-right: 0;
+  font-size: 11.5px;
+  line-height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+}
+.chip-clear {
+  cursor: pointer;
+  color: var(--color-primary);
+  border-color: var(--color-primary-border);
+}
+
+/* ===== 流区（固定 780px 阅读列，居中） ===== */
+.flow {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 8px;
+  padding: 2px 4px 8px 2px;
+}
+.flow > :deep(*),
+.flow > * {
+  width: 100%;
+  max-width: 780px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .memo-empty {
@@ -896,76 +1180,34 @@ onMounted(load);
   color: var(--text-tertiary);
   font-size: 13px;
 }
-
-.memo-list {
+.hero-empty {
+  height: auto;
+  padding: 70px 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.memo-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-.memo-item:hover {
-  background: var(--color-hover);
-}
-
-.memo-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.memo-title-line {
-  display: flex;
   align-items: center;
   gap: 6px;
+  text-align: center;
 }
-.memo-title {
-  font-size: 13.5px;
+.empty-icon {
+  font-size: 34px;
+  opacity: 0.55;
+}
+.empty-title {
+  margin: 0;
+  font-size: 14px;
   font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: var(--text-secondary);
 }
+.empty-sub {
+  margin: 0;
+  font-size: 12px;
+}
+
 .memo-pin-mark {
   font-size: 12px;
   color: var(--color-primary);
   flex-shrink: 0;
-}
-.memo-vis-mark {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  flex-shrink: 0;
-}
-
-.memo-excerpt {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.memo-meta {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 5px;
-  flex-wrap: wrap;
-}
-.memo-meta :deep(.ant-tag) {
-  margin-right: 0;
-  font-size: 11px;
-  line-height: 18px;
-  padding: 0 6px;
 }
 .memo-time {
   margin-left: auto;
@@ -984,15 +1226,22 @@ onMounted(load);
 .memo-card:hover .memo-ops {
   opacity: 1;
 }
-/* 卡片视图操作行：悬浮时浮在卡片底部 */
+/* 卡片视图操作行：悬浮时浮在卡片底部（毛玻璃胶囊，缓入不跳动） */
 .memo-card-ops {
   position: absolute;
   right: 8px;
   bottom: 8px;
-  background: var(--bg-elevated);
+  background: color-mix(in srgb, var(--bg-surface) 86%, transparent);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
+  border-radius: 999px;
   padding: 2px;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--text-primary) 8%, transparent);
+  transform: translateY(3px);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+.memo-card:hover .memo-card-ops {
+  transform: translateY(0);
 }
 .op-btn {
   display: grid;
@@ -1003,13 +1252,13 @@ onMounted(load);
   color: var(--text-tertiary);
   background: transparent;
   border: none;
-  border-radius: var(--radius-xs);
+  border-radius: 999px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: color var(--transition-fast), background var(--transition-fast);
 }
 .op-btn:hover {
   color: var(--text-primary);
-  background: var(--bg-input);
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
 }
 .op-btn.on {
   color: var(--color-primary);
@@ -1035,12 +1284,12 @@ onMounted(load);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
   min-height: 120px;
 }
 .memo-card:hover {
-  border-color: var(--color-primary-border);
-  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--color-primary) 38%, var(--border-light));
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
 .memo-card-head {
@@ -1135,95 +1384,6 @@ onMounted(load);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-}
-
-/* ===== 日历视图 ===== */
-.cal-layout {
-  display: grid;
-  grid-template-columns: 340px 1fr;
-  gap: 12px;
-  align-items: start;
-}
-.cal-day-panel {
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  background: var(--bg-input);
-  min-height: 200px;
-  overflow: hidden;
-}
-.cal-day-title {
-  padding: 9px 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-light);
-  background: var(--bg-elevated);
-}
-.cal-day-empty {
-  display: grid;
-  place-items: center;
-  height: 160px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-.cal-day-list {
-  display: flex;
-  flex-direction: column;
-}
-.cal-day-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--border-light);
-  cursor: pointer;
-  transition: background var(--transition-fast);
-}
-.cal-day-item:last-child {
-  border-bottom: none;
-}
-.cal-day-item:hover {
-  background: var(--color-hover);
-}
-.cal-item-time {
-  flex-shrink: 0;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
-}
-.cal-item-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cal-item-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cal-item-excerpt {
-  font-size: 11.5px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cal-item-cat {
-  margin-right: 0;
-  font-size: 10.5px;
-  line-height: 17px;
-  padding: 0 6px;
-}
-
-/* ===== 时间轴视图 ===== */
-.tl-wrap {
-  max-width: 880px;
-  margin: 0 auto;
 }
 
 /* ===== 附件徽标（列表/卡片 meta） ===== */
