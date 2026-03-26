@@ -271,6 +271,44 @@ fn attachment_db_lifecycle() {
     cleanup(svc, &root);
 }
 
+// ============ 附件（FILE 存储模式 + 资源库总览 + purge 级联）============
+
+#[test]
+fn attachment_file_bytes_upload_and_purge_cascade() {
+    let (svc, root) = temp_service("attfile");
+    let m = svc.add_memo(&input("文件附件", "内容", &[], None)).unwrap();
+
+    // 字节上传（桌面端路径）：落盘 + 记 FILE 记录
+    let id = svc
+        .upload_attachment_bytes(&m.short_id, "图片.png", "image/png", b"\x89PNG-bytes")
+        .unwrap();
+    let list = svc.list_attachments(&m.short_id).unwrap();
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].storage_type, "FILE");
+
+    // 统一内容读取（FILE 模式读磁盘）
+    let (att, bytes) = svc.read_attachment_content(id).unwrap().unwrap();
+    assert_eq!(att.filename, "图片.png");
+    assert_eq!(bytes, b"\x89PNG-bytes");
+
+    // 资源库总览：备忘录存在 → 非 orphan
+    let all = svc.list_all_attachments().unwrap();
+    assert_eq!(all.len(), 1);
+    assert!(!all[0].orphan);
+
+    // purge 备忘录 → 附件记录与磁盘文件一并清理
+    svc.purge_memo(&m.short_id).unwrap();
+    let all = svc.list_all_attachments().unwrap();
+    assert!(all.is_empty(), "purge 应级联清理附件记录");
+    let file = root.join("attachments").join(&m.short_id).join("图片.png");
+    assert!(!file.exists(), "purge 应删除磁盘附件文件");
+
+    // 桌面上传到不存在的笔记应报错
+    assert!(svc.upload_attachment_bytes("NOPE0000", "x.txt", "", b"x").is_err());
+
+    cleanup(svc, &root);
+}
+
 // ============ 统计 ============
 
 #[test]

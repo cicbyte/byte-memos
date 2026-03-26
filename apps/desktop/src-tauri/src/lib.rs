@@ -56,10 +56,18 @@ pub fn run() {
             commands::categories::rename_category,
             commands::categories::delete_category,
             commands::categories::set_category_color,
-            // 统计（标签云 / 概览 / 全局搜索）
+            // 统计（标签云 / 概览 / 全局搜索 / 日历日计数）
             commands::stats::tag_stats,
             commands::stats::stats_overview,
             commands::stats::search_all,
+            commands::stats::memo_daily_counts,
+            // 附件（byte-memos 附件管理域）
+            commands::attachments::attachment_upload,
+            commands::attachments::attachment_list,
+            commands::attachments::attachment_list_all,
+            commands::attachments::attachment_content,
+            commands::attachments::attachment_delete,
+            commands::attachments::attachment_save,
             // 备忘录（byte-memos 核心领域）
             commands::memos::add_memo,
             commands::memos::update_memo,

@@ -4,6 +4,7 @@ pub mod system;
 pub mod memos;
 pub mod categories;
 pub mod stats;
+pub mod attachments;
 pub mod wallpaper;
 pub mod trash;
 pub mod config;

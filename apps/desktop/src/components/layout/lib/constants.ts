@@ -13,6 +13,7 @@ import {
   CloudServerOutlined,
   GlobalOutlined,
   FileTextOutlined,
+  PaperClipOutlined,
 } from "@ant-design/icons-vue";
 
 export type IconComp = typeof DashboardOutlined;
@@ -37,6 +38,7 @@ export const menuGroups: MenuGroup[] = [
     label: "内容",
     children: [
       { key: "/memos", icon: FileTextOutlined },
+      { key: "/attachments", icon: PaperClipOutlined },
       { key: "/favorites", icon: PushpinOutlined },
       { key: "/trash", icon: DeleteOutlined },
     ],
@@ -67,6 +69,7 @@ export const menuGroups: MenuGroup[] = [
 export const labelOf: Record<string, string> = {
   "/": "仪表盘",
   "/memos": "备忘录",
+  "/attachments": "附件库",
   "/tags": "标签",
   "/categories": "分类",
   "/favorites": "置顶",

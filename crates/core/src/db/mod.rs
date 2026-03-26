@@ -17,6 +17,7 @@ mod relations;
 mod versions;
 pub mod templates;
 pub mod attachments;
+pub mod stats;
 
 #[cfg(test)]
 mod tests;

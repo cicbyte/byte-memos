@@ -41,6 +41,11 @@ impl super::ProjectService {
     pub fn tag_stats(&self, limit: i64) -> CoreResult<Vec<TagStat>> {
         self.db.tag_stats(limit)
     }
+
+    /// 按本地日期聚合的备忘录日计数（日历热力图数据源）
+    pub fn list_memo_daily_counts(&self) -> CoreResult<Vec<crate::db::stats::DailyCount>> {
+        self.db.list_memo_daily_counts()
+    }
 }
 
 /// 递归统计 data/ 目录下所有文件总大小

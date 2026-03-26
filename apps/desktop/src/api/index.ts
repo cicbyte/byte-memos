@@ -12,6 +12,7 @@
 import { dialogApi } from "./dialog";
 import { memosApi } from "./memos";
 import { categoriesApi } from "./categories";
+import { attachmentsApi } from "./attachments";
 import { trashApi } from "./trash";
 import { backupApi } from "./backup";
 import { wallpaperApi } from "./wallpaper";
@@ -23,6 +24,7 @@ export const api = {
   ...dialogApi,
   ...memosApi,
   ...categoriesApi,
+  ...attachmentsApi,
   ...trashApi,
   ...backupApi,
   ...wallpaperApi,

@@ -5,7 +5,7 @@
  * invoke 参数键用 camelCase（Tauri 自动映射 Rust snake_case）。
  */
 import { invoke } from "@tauri-apps/api/core";
-import type { Memo, MemoListParams, MemoSearchHit, MemoVersionInfo, PagedResult, StatsOverview } from "./types";
+import type { DailyCount, Memo, MemoListParams, MemoSearchHit, MemoVersionInfo, PagedResult, StatsOverview } from "./types";
 
 export const memosApi = {
   // ===== 备忘录 =====
@@ -93,4 +93,7 @@ export const memosApi = {
 
   /** 统计概览（备忘录/标签/分类计数 + 存储占用 + 置顶/回收站计数） */
   statsOverview: () => invoke<StatsOverview>("stats_overview"),
+
+  /** 按本地日期聚合的备忘录日计数（日历热力图数据源） */
+  dailyCounts: () => invoke<DailyCount[]>("memo_daily_counts"),
 };

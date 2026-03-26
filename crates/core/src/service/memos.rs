@@ -143,8 +143,10 @@ impl super::ProjectService {
         Ok(())
     }
 
-    /// 彻底删除备忘录（物理删除 DB 行 + 关联 CASCADE + FTS）
+    /// 彻底删除备忘录（物理删除 DB 行 + 关联 CASCADE + FTS + 附件文件清理）
     pub fn purge_memo(&self, short_id: &str) -> CoreResult<()> {
+        // 附件（文件 + 记录）先清，避免留下游离文件
+        self.delete_attachments_of_memo(short_id)?;
         self.db.delete_memo(short_id)?;
         Ok(())
     }

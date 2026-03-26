@@ -28,6 +28,15 @@ pub struct Attachment {
     pub created_at: String,
 }
 
+/// 附件总览行（资源库页用，带备忘录存在性标记）
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AttachmentOverview {
+    #[serde(flatten)]
+    pub attachment: Attachment,
+    /// 关联的备忘录已不存在（游离附件，可安全清理）
+    pub orphan: bool,
+}
+
 impl Database {
     /// 创建附件记录（DB 存储模式：将文件内容存入 blob 列）
     pub fn create_attachment_db(
@@ -135,5 +144,56 @@ impl Database {
         let conn = self.lock()?;
         conn.execute("DELETE FROM attachment WHERE id = ?", params![id])?;
         Ok(())
+    }
+
+    /// 列出全部附件（资源库用），LEFT JOIN 标记备忘录已不存在的游离附件
+    pub fn list_all_attachments(&self) -> CoreResult<Vec<AttachmentOverview>> {
+        let conn = self.lock()?;
+        let mut stmt = conn.prepare(
+            "SELECT a.id, a.memo_short_id, a.filename, a.file_path, a.file_size,
+                    a.mime_type, a.storage_type, a.created_at,
+                    (m.short_id IS NULL) AS orphan
+             FROM attachment a
+             LEFT JOIN memo m ON m.short_id = a.memo_short_id
+             ORDER BY a.created_at DESC",
+        )?;
+        let rows = stmt
+            .query_map(params![], |r| {
+                Ok(AttachmentOverview {
+                    attachment: Attachment {
+                        id: r.get(0)?,
+                        memo_short_id: r.get(1)?,
+                        filename: r.get(2)?,
+                        file_path: r.get(3)?,
+                        file_size: r.get(4)?,
+                        mime_type: r.get(5)?,
+                        storage_type: r.get(6)?,
+                        created_at: r.get(7)?,
+                    },
+                    orphan: r.get::<_, i64>(8)? != 0,
+                })
+            })?
+            .filter_map(|r| r.ok())
+            .collect();
+        Ok(rows)
+    }
+
+    /// 删除某备忘录的全部附件记录（返回被删 id 列表，供上层清理文件）
+    pub fn delete_attachments_of_memo(&self, memo_short_id: &str) -> CoreResult<Vec<i64>> {
+        let conn = self.lock()?;
+        let ids: Vec<i64> = {
+            let mut stmt =
+                conn.prepare("SELECT id FROM attachment WHERE memo_short_id = ?")?;
+            let rows = stmt
+                .query_map(params![memo_short_id], |r| r.get(0))?
+                .filter_map(|r| r.ok())
+                .collect();
+            rows
+        };
+        conn.execute(
+            "DELETE FROM attachment WHERE memo_short_id = ?",
+            params![memo_short_id],
+        )?;
+        Ok(ids)
     }
 }

@@ -94,6 +94,40 @@ export interface PagedResult<T> {
 
 export type ItemType = "memo";
 
+// ============ 附件 ============
+
+/** 附件记录（对齐 core db::attachments::Attachment） */
+export interface AttachmentInfo {
+  id: number;
+  memo_short_id: string;
+  filename: string;
+  /** FILE 模式为相对 data 目录路径；DB 模式为空 */
+  file_path: string;
+  file_size: number;
+  mime_type: string;
+  /** DB / FILE */
+  storage_type: string;
+  created_at: string;
+}
+
+/** 附件总览行（资源库用，orphan=所属备忘录已不存在） */
+export interface AttachmentOverview extends AttachmentInfo {
+  orphan: boolean;
+}
+
+/** 附件内容载荷（attachment_content 命令返回，bytes 为字节数组） */
+export interface AttachmentContent {
+  filename: string;
+  mime_type: string;
+  bytes: number[];
+}
+
+/** 单日备忘录计数（日历热力图数据源，本地时区日期） */
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
 export interface TrashedItem {
   short_id: string;
   item_type: ItemType;

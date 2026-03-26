@@ -2,6 +2,7 @@
 //!
 //! 备忘录的标签云（tags 页 / dashboard）、全局搜索（Navbar）依赖这些命令。
 
+use byte_memos_core::db::stats::DailyCount;
 use byte_memos_core::model::{StatsOverview, TagStat, UnifiedSearchHit};
 use tauri::State;
 
@@ -32,5 +33,14 @@ pub fn search_all(
     state
         .svc()
         .search_all(&query, limit.unwrap_or(20), 0)
+        .map_err(|e| e.to_string())
+}
+
+/// 按本地日期聚合的备忘录日计数（日历热力图数据源）
+#[tauri::command]
+pub fn memo_daily_counts(state: State<'_, AppState>) -> Result<Vec<DailyCount>, String> {
+    state
+        .svc()
+        .list_memo_daily_counts()
         .map_err(|e| e.to_string())
 }

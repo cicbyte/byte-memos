@@ -23,13 +23,20 @@ import {
   UnorderedListOutlined,
   HistoryOutlined,
   DownloadOutlined,
+  CalendarOutlined,
+  FieldTimeOutlined,
+  PaperClipOutlined,
+  UploadOutlined,
 } from "@ant-design/icons-vue";
 import { message, Modal } from "ant-design-vue";
 import "md-editor-v3/lib/style.css";
 import { api } from "@/api";
-import type { Category, Memo, MemoVersionInfo } from "@/api/types";
+import type { AttachmentInfo, Category, DailyCount, Memo, MemoVersionInfo } from "@/api/types";
+import { attachmentObjectUrl, revokeAttachmentUrl, isImageMime, fmtSize } from "@/api/attachments";
 import { useThemeStore } from "@/stores/theme";
 import { useLayoutStore } from "@/stores/layout";
+import MemoCalendar from "./components/MemoCalendar.vue";
+import MemoTimeline from "./components/MemoTimeline.vue";
 
 /** 编辑器懒加载：1.6MB 的 md-editor-v3 只在首次打开抽屉时拉取（异步 chunk） */
 const MdEditor = defineAsyncComponent(
@@ -49,13 +56,55 @@ const searchQuery = ref("");
 const filterCat = ref<string>("");
 const filterTag = ref<string>("");
 
-/** 视图模式：list（行）/ card（网格），localStorage 持久化 */
-const viewMode = ref<"list" | "card">(
-  (localStorage.getItem("memo-view-mode") as "list" | "card") || "list",
+/** 视图模式：list（行）/ card（网格）/ timeline（时间轴）/ calendar（日历），localStorage 持久化 */
+const viewMode = ref<"list" | "card" | "timeline" | "calendar">(
+  (localStorage.getItem("memo-view-mode") as "list" | "card" | "timeline" | "calendar") || "list",
 );
-function setView(m: "list" | "card") {
+function setView(m: "list" | "card" | "timeline" | "calendar") {
   viewMode.value = m;
   localStorage.setItem("memo-view-mode", m);
+}
+
+/** 日历选中日期（YYYY-MM-DD 本地日期；null=不限）——对所有视图生效的可关闭筛选 */
+const filterDate = ref<string | null>(null);
+
+/** 日历热力数据：本地日期 → 当日条数 */
+const dailyCounts = ref<Record<string, number>>({});
+async function loadDailyCounts() {
+  try {
+    const rows: DailyCount[] = await api.dailyCounts();
+    const rec: Record<string, number> = {};
+    for (const r of rows) rec[r.date] = r.count;
+    dailyCounts.value = rec;
+  } catch {
+    dailyCounts.value = {};
+  }
+}
+
+/** ISO(UTC) → 本地日期键（与 dailyCounts 的 'localtime' 聚焦口径一致） */
+function localDateKey(iso: string): string {
+  const d = new Date(iso);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** 附件索引：memo short_id → 附件列表（徽标用，一次全量查询） */
+const attachMap = ref<Map<string, AttachmentInfo[]>>(new Map());
+async function loadAttachMap() {
+  try {
+    const all = await api.attachmentListAll();
+    const map = new Map<string, AttachmentInfo[]>();
+    for (const a of all) {
+      if (!map.has(a.memo_short_id)) map.set(a.memo_short_id, []);
+      map.get(a.memo_short_id)!.push(a);
+    }
+    attachMap.value = map;
+  } catch {
+    attachMap.value = new Map();
+  }
+}
+function attachCount(m: Memo): number {
+  return attachMap.value.get(m.short_id)?.length || 0;
 }
 
 // 新增/编辑抽屉
@@ -77,12 +126,13 @@ const VISIBILITY_OPTIONS = [
   { value: "PUBLIC", label: "公开" },
 ];
 
-/** 本地实时过滤（已加载列表内：标题/内容/标签） */
+/** 本地实时过滤（已加载列表内：标题/内容/标签/日期） */
 const filtered = computed(() => {
   const q = searchQuery.value.trim().toLowerCase();
   let list = memos.value;
   if (filterCat.value) list = list.filter((m) => m.category === filterCat.value);
   if (filterTag.value) list = list.filter((m) => m.tags.includes(filterTag.value));
+  if (filterDate.value) list = list.filter((m) => localDateKey(m.created_at) === filterDate.value);
   if (!q) return list;
   return list.filter(
     (m) =>
@@ -133,6 +183,8 @@ async function load() {
     } catch {
       categories.value = [];
     }
+    loadDailyCounts();
+    loadAttachMap();
     updateFooter();
     // 支持 ?id= 路由参数（置顶页/标签页/仪表盘/全局搜索跳转）→ 打开编辑
     const id = route.query.id as string | undefined;
@@ -281,7 +333,81 @@ function openEdit(m: Memo) {
     pinned: m.pinned,
   };
   loadTags();
+  loadEditAttaches(m.short_id);
   drawerOpen.value = true;
+}
+
+// ===== 编辑抽屉附件 =====
+
+const editAttaches = ref<AttachmentInfo[]>([]);
+const editAttUrls = ref<Record<number, string>>({});
+const uploading = ref(false);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+async function loadEditAttaches(shortId: string) {
+  try {
+    editAttaches.value = await api.attachmentList(shortId);
+  } catch {
+    editAttaches.value = [];
+  }
+  // 图片附件预取缩略 ObjectURL
+  const urls: Record<number, string> = {};
+  for (const a of editAttaches.value) {
+    if (isImageMime(a.mime_type)) {
+      try {
+        urls[a.id] = await attachmentObjectUrl(a.id);
+      } catch {
+        /* 预览失败不阻断 */
+      }
+    }
+  }
+  editAttUrls.value = urls;
+}
+
+async function onPickFiles(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  input.value = "";
+  if (!files.length || !editing.value) return;
+  uploading.value = true;
+  try {
+    for (const f of files) {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      await api.attachmentUpload(editing.value.short_id, f.name, f.type || "", bytes);
+    }
+    message.success(`已添加 ${files.length} 个附件`);
+    await loadEditAttaches(editing.value.short_id);
+    loadAttachMap();
+  } catch (err: any) {
+    message.error(typeof err === "string" ? err : "附件上传失败");
+  } finally {
+    uploading.value = false;
+  }
+}
+
+async function removeAttachment(a: AttachmentInfo) {
+  if (!editing.value) return;
+  try {
+    await api.attachmentDelete(a.id);
+    revokeAttachmentUrl(a.id);
+    message.success("附件已删除");
+    await loadEditAttaches(editing.value.short_id);
+    loadAttachMap();
+  } catch {
+    message.error("删除失败");
+  }
+}
+
+async function downloadAttachment(a: AttachmentInfo) {
+  const ext = a.filename.includes(".") ? a.filename.split(".").pop()! : "bin";
+  const path = await api.pickExportPath(a.filename, ext);
+  if (!path) return;
+  try {
+    const saved = await api.attachmentSave(a.id, path);
+    message.success(`已保存：${saved}`);
+  } catch {
+    message.error("保存失败");
+  }
 }
 
 async function save() {
@@ -319,6 +445,8 @@ async function save() {
     } catch {
       /* 忽略 */
     }
+    loadDailyCounts();
+    loadAttachMap();
     updateFooter();
   } catch (e: any) {
     message.error(typeof e === "string" ? e : "保存失败");
@@ -368,12 +496,22 @@ onMounted(load);
           <a-select-option v-for="t in allTags" :key="t" :value="t">#{{ t }}</a-select-option>
         </a-select>
 
+        <a-tag v-if="filterDate" class="date-chip" closable @close="filterDate = null">
+          <CalendarOutlined /> {{ filterDate }}
+        </a-tag>
+
         <div class="view-toggle">
           <button class="vt-btn" :class="{ on: viewMode === 'list' }" title="列表视图" @click="setView('list')">
             <UnorderedListOutlined />
           </button>
           <button class="vt-btn" :class="{ on: viewMode === 'card' }" title="卡片视图" @click="setView('card')">
             <AppstoreOutlined />
+          </button>
+          <button class="vt-btn" :class="{ on: viewMode === 'timeline' }" title="时间轴视图" @click="setView('timeline')">
+            <FieldTimeOutlined />
+          </button>
+          <button class="vt-btn" :class="{ on: viewMode === 'calendar' }" title="日历视图" @click="setView('calendar')">
+            <CalendarOutlined />
           </button>
         </div>
 
@@ -386,7 +524,43 @@ onMounted(load);
       <div class="panel-body">
         <div v-if="loading" class="memo-empty">加载中…</div>
         <div v-else-if="!filtered.length" class="memo-empty">
-          {{ searchQuery || filterCat || filterTag ? "无匹配备忘录" : "暂无备忘录 — 点 + 新建第一篇" }}
+          {{ searchQuery || filterCat || filterTag || filterDate ? "无匹配备忘录" : "暂无备忘录 — 点 + 新建第一篇" }}
+        </div>
+
+        <!-- 日历视图：月历热力 + 当日列表 -->
+        <div v-else-if="viewMode === 'calendar'" class="cal-layout">
+          <div class="cal-side">
+            <MemoCalendar :counts="dailyCounts" :selected="filterDate" @select="filterDate = $event" />
+          </div>
+          <div class="cal-day-panel">
+            <div class="cal-day-title">
+              {{ filterDate ? `${filterDate} · ${filtered.length} 条` : "未选择日期 — 点左侧日历" }}
+            </div>
+            <div v-if="!filterDate" class="cal-day-empty">选中日期后在此查看当日备忘录</div>
+            <div v-else class="cal-day-list">
+              <div v-for="m in filtered" :key="m.short_id" class="cal-day-item" @click="openEdit(m)">
+                <span class="cal-item-time">{{ fmtDate(m.created_at).slice(11, 16) }}</span>
+                <div class="cal-item-main">
+                  <span class="cal-item-title">{{ m.title || "无标题" }}</span>
+                  <span class="cal-item-excerpt">{{ excerpt(m, 80) }}</span>
+                </div>
+                <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'" class="cal-item-cat">
+                  {{ m.category }}
+                </a-tag>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 时间轴视图：日期分组纵向轨道 -->
+        <div v-else-if="viewMode === 'timeline'" class="tl-wrap">
+          <MemoTimeline
+            :memos="filtered"
+            :cat-color-map="catColorMap"
+            @open="openEdit"
+            @pin="togglePin"
+            @del="remove"
+          />
         </div>
 
         <!-- 列表视图 -->
@@ -403,6 +577,9 @@ onMounted(load);
               <div class="memo-meta">
                 <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'">{{ m.category }}</a-tag>
                 <a-tag v-for="t in m.tags" :key="t">#{{ t }}</a-tag>
+                <span v-if="attachCount(m)" class="attach-badge" title="附件数">
+                  <PaperClipOutlined /> {{ attachCount(m) }}
+                </span>
                 <span class="memo-time">更新于 {{ fmtDate(m.updated_at) }}</span>
               </div>
             </div>
@@ -437,6 +614,9 @@ onMounted(load);
             <div class="memo-card-meta">
               <a-tag v-if="m.category" :color="catColorMap.get(m.category) || 'geekblue'">{{ m.category }}</a-tag>
               <a-tag v-for="t in m.tags.slice(0, 3)" :key="t">#{{ t }}</a-tag>
+              <span v-if="attachCount(m)" class="attach-badge" title="附件数">
+                <PaperClipOutlined /> {{ attachCount(m) }}
+              </span>
               <span class="memo-time">{{ fmtDate(m.updated_at) }}</span>
             </div>
             <div class="memo-ops memo-card-ops">
@@ -532,6 +712,29 @@ onMounted(load);
           <span class="form-pin-label">置顶</span>
           <a-switch v-model:checked="form.pinned" size="small" />
         </div>
+
+        <!-- 附件（编辑已有备忘录时可用） -->
+        <div v-if="editing" class="form-row attach-section">
+          <div class="attach-head">
+            <span class="attach-title">附件（{{ editAttaches.length }}）</span>
+            <button class="attach-upload" :disabled="uploading" @click="fileInput?.click()">
+              <UploadOutlined /> {{ uploading ? "上传中…" : "添加附件" }}
+            </button>
+            <input ref="fileInput" type="file" multiple style="display: none" @change="onPickFiles" />
+          </div>
+          <div v-if="editAttaches.length" class="attach-list">
+            <div v-for="a in editAttaches" :key="a.id" class="attach-item">
+              <img v-if="editAttUrls[a.id]" :src="editAttUrls[a.id]" class="attach-thumb" :alt="a.filename" />
+              <span v-else class="attach-icon"><PaperClipOutlined /></span>
+              <span class="attach-name" :title="a.filename">{{ a.filename }}</span>
+              <span class="attach-size">{{ fmtSize(a.file_size) }}</span>
+              <button class="op-btn" title="下载" @click="downloadAttachment(a)"><DownloadOutlined /></button>
+              <button class="op-btn danger" title="删除" @click="removeAttachment(a)"><DeleteOutlined /></button>
+            </div>
+          </div>
+          <div v-else class="attach-empty">暂无附件 — 图片将显示缩略预览</div>
+        </div>
+        <div v-else class="attach-hint">附件在保存后可添加（新建完成即出现附件区）</div>
 
         <div class="form-actions">
           <a-button @click="drawerOpen = false">取消</a-button>
@@ -932,6 +1135,201 @@ onMounted(load);
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ===== 日历视图 ===== */
+.cal-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.cal-day-panel {
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--bg-input);
+  min-height: 200px;
+  overflow: hidden;
+}
+.cal-day-title {
+  padding: 9px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-light);
+  background: var(--bg-elevated);
+}
+.cal-day-empty {
+  display: grid;
+  place-items: center;
+  height: 160px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+.cal-day-list {
+  display: flex;
+  flex-direction: column;
+}
+.cal-day-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border-light);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.cal-day-item:last-child {
+  border-bottom: none;
+}
+.cal-day-item:hover {
+  background: var(--color-hover);
+}
+.cal-item-time {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
+}
+.cal-item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cal-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-item-excerpt {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cal-item-cat {
+  margin-right: 0;
+  font-size: 10.5px;
+  line-height: 17px;
+  padding: 0 6px;
+}
+
+/* ===== 时间轴视图 ===== */
+.tl-wrap {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+/* ===== 附件徽标（列表/卡片 meta） ===== */
+.attach-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  padding: 0 6px;
+  line-height: 17px;
+}
+
+/* ===== 编辑抽屉附件区 ===== */
+.attach-section {
+  flex-direction: column;
+  gap: 8px;
+}
+.attach-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.attach-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.attach-upload {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+  color: var(--color-primary);
+  background: transparent;
+  border: 1px solid var(--color-primary-border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.attach-upload:hover {
+  background: var(--color-primary-bg);
+}
+.attach-upload:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.attach-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 180px;
+  overflow: auto;
+}
+.attach-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+.attach-thumb {
+  width: 34px;
+  height: 34px;
+  object-fit: cover;
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+.attach-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  font-size: 15px;
+  color: var(--text-tertiary);
+  background: var(--bg-input);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+.attach-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attach-size {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
+}
+.attach-empty,
+.attach-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  padding: 6px 2px;
 }
 
 /* ===== 版本历史抽屉 ===== */

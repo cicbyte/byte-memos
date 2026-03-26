@@ -14,6 +14,12 @@ const routes = [
     meta: { title: "备忘录", group: "内容", fullsize: true },
   },
   {
+    path: "/attachments",
+    name: "attachments",
+    component: () => import("@/views/attachments/index.vue"),
+    meta: { title: "附件库", group: "内容", fullsize: true },
+  },
+  {
     path: "/tags",
     name: "tags",
     component: () => import("@/views/tags/index.vue"),
