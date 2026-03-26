@@ -15,6 +15,75 @@ fn fts_query_builder() {
     assert_eq!(build_fts_query(""), "");
 }
 
+/// P0 #983 回归：byte-link 遗留库（user_version=16、有 bookmarks、无 memo 表）
+/// 打开时必须补跑 byte-memos v13+ 迁移——memo 表族建好、书签表按 v13 语义清除。
+#[test]
+fn legacy_version_collision_rebases_to_memo_schema() {
+    legacy_collision_case(16);
+}
+
+/// 真实案例的精确形态：遗留库版本号已被此前误 bump 到 CURRENT_VERSION（17），
+/// 提前返回路径必须仍能检测冲突并补跑。
+#[test]
+fn legacy_version_collision_at_current_version_rebases() {
+    legacy_collision_case(17);
+}
+
+fn legacy_collision_case(user_version: u32) {
+    let conn = rusqlite::Connection::open_in_memory().unwrap();
+    // 模拟 byte-link 遗留库：书签时代 schema + 版本号已到冲突值
+    conn.execute_batch(
+        "
+        CREATE TABLE bookmarks (id INTEGER PRIMARY KEY, title TEXT);
+        CREATE TABLE bookmark_tag_rel (bookmark_id INTEGER, tag_id INTEGER);
+        CREATE TABLE tags (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE project_categories (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        INSERT INTO bookmarks (title) VALUES ('legacy bookmark');
+        ",
+    )
+    .unwrap();
+    conn.execute_batch(&format!("PRAGMA user_version = {user_version};")).unwrap();
+
+    super::schema::run_migrations(&conn).unwrap();
+
+    let has = |name: &str| -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?1",
+            [name],
+            |r| r.get::<_, i64>(0),
+        )
+        .unwrap()
+            > 0
+    };
+    // memo 表族补建完成
+    for t in ["memo", "memo_tag", "memo_fts", "memo_version", "memo_template", "memo_relation", "attachment"] {
+        assert!(has(t), "补跑后缺少表 {t}");
+    }
+    // 书签表按 v13 语义清除
+    assert!(!has("bookmarks"), "bookmarks 应已被 v13 清除");
+    assert!(!has("bookmark_tag_rel"), "bookmark_tag_rel 应已被 v13 清除");
+    // 版本号与列守卫
+    let v: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+    assert_eq!(v as u32, super::schema::CURRENT_VERSION);
+    let tag_cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(tags)")
+        .unwrap()
+        .query_map([], |r| r.get::<_, String>(1))
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect();
+    assert!(tag_cols.contains(&"parent_id".into()), "tags.parent_id 缺失");
+    assert!(tag_cols.contains(&"color".into()), "tags.color 缺失");
+    let cat_cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(project_categories)")
+        .unwrap()
+        .query_map([], |r| r.get::<_, String>(1))
+        .unwrap()
+        .filter_map(|r| r.ok())
+        .collect();
+    assert!(cat_cols.contains(&"color".into()), "project_categories.color 缺失");
+}
+
 #[test]
 fn upsert_tag_is_idempotent() {
     let db = mem_db();

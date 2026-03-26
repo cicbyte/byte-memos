@@ -6,7 +6,7 @@
 //! 各版本迁移按 vN 拆到子模块；本模块负责版本管理与按序调度。
 
 use crate::CoreResult;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 mod v01_base;
 mod v02_03_snippets;
@@ -46,8 +46,18 @@ pub const CURRENT_VERSION: u32 = 17;
 /// 在全新/既有连接上运行迁移，使其达到 CURRENT_VERSION
 pub fn run_migrations(conn: &Connection) -> CoreResult<()> {
     let current = get_user_version(conn)?;
-    if current >= CURRENT_VERSION {
+    // 遗留库版本冲突检测必须先于提前返回：byte-link 真实用户库的 user_version
+    // 已到 16+，而 byte-memos 转型时复用了 v13+ 编号定义 memo 表族——仅看版本号
+    // 会整体跳过 memo 创建，所有 memo 操作报 no such table: memo（P0 #983）。
+    // 以「声明已迁移却无 memo 表」为准强制补跑；受影响迁移均带幂等守卫。
+    let legacy_collision = current >= 13 && !table_exists(conn, "memo")?;
+    if current >= CURRENT_VERSION && !legacy_collision {
         return Ok(());
+    }
+    if legacy_collision {
+        tracing::warn!(
+            "检测到遗留库版本冲突（user_version={current} 无 memo 表），补跑 byte-memos v13+ 迁移"
+        );
     }
     if current < 1 {
         migrate_v1(conn)?;
@@ -85,21 +95,22 @@ pub fn run_migrations(conn: &Connection) -> CoreResult<()> {
     if current < 12 {
         migrate_v12(conn)?;
     }
-    if current < 13 {
+    if current < 13 || legacy_collision {
         migrate_v13(conn)?;
     }
-    if current < 14 {
+    if current < 14 || legacy_collision {
         migrate_v14(conn)?;
     }
-    if current < 15 {
+    if current < 15 || legacy_collision {
         migrate_v15(conn)?;
     }
-    if current < 16 {
+    if current < 16 || legacy_collision {
         migrate_v16(conn)?;
     }
-    if current < 17 {
+    if current < 17 || legacy_collision {
         migrate_v17(conn)?;
     }
+
     set_user_version(conn, CURRENT_VERSION)?;
     tracing::info!("数据库迁移完成：{} -> {CURRENT_VERSION}", current);
     Ok(())
@@ -108,6 +119,26 @@ pub fn run_migrations(conn: &Connection) -> CoreResult<()> {
 fn get_user_version(conn: &Connection) -> CoreResult<u32> {
     let v: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     Ok(v as u32)
+}
+
+/// 表是否存在
+fn table_exists(conn: &Connection, name: &str) -> CoreResult<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?1",
+        params![name],
+        |r| r.get(0),
+    )?;
+    Ok(n > 0)
+}
+
+/// 列是否存在（幂等 ALTER 守卫用）
+fn column_exists(conn: &Connection, table: &str, column: &str) -> CoreResult<bool> {
+    let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
+    let found = stmt
+        .query_map([], |r| r.get::<_, String>(1))?
+        .filter_map(|r| r.ok())
+        .any(|c| c == column);
+    Ok(found)
 }
 
 fn set_user_version(conn: &Connection, version: u32) -> CoreResult<()> {

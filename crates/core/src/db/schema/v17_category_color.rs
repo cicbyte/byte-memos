@@ -8,7 +8,10 @@ use crate::CoreResult;
 use rusqlite::Connection;
 
 pub fn migrate_v17(conn: &Connection) -> CoreResult<()> {
-    conn.execute_batch("ALTER TABLE project_categories ADD COLUMN color TEXT;")?;
-    tracing::info!("V17: project_categories 增加 color 列");
+    // 幂等守卫：遗留库版本冲突补跑时列可能已存在（ALTER 无 IF NOT EXISTS 语义）
+    if !super::column_exists(conn, "project_categories", "color")? {
+        conn.execute_batch("ALTER TABLE project_categories ADD COLUMN color TEXT;")?;
+        tracing::info!("V17: project_categories 增加 color 列");
+    }
     Ok(())
 }
