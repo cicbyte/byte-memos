@@ -950,7 +950,7 @@ onMounted(load);
             style="height: 400px"
             placeholder="正文（Markdown）…　Ctrl+S 保存 · 粘贴图片自动存为附件"
             :footers="['markdownTotal']"
-            :toolbars="['bold', 'underline', 'italic', '-', 'title', 'strikeThrough', 'sub', 'sup', 'quote', 'unorderedList', 'orderedList', 'task', '-', 'codeRow', 'code', 'link', 'image', 'table', 'mermaid', '-', 'revoke', 'next', 'save', '=', 'pageFullscreen', 'fullscreen', 'preview', 'htmlPreview', 'catalog', 'github']"
+            :toolbars="['bold', 'underline', 'italic', '-', 'title', 'strikeThrough', 'quote', 'unorderedList', 'orderedList', 'task', '-', 'codeRow', 'code', 'link', 'image', 'table', '-', 'revoke', 'next', 'save', '=', 'pageFullscreen', 'fullscreen', 'preview', 'catalog']"
             @save="save"
             @on-upload-img="onEditorUploadImg"
           />
@@ -1001,7 +1001,10 @@ onMounted(load);
           </div>
           <div v-else class="attach-empty">暂无附件 — 图片将显示缩略预览</div>
         </div>
-        <div v-else class="attach-hint">📁 保存后可添加附件 · 编辑器里粘贴/选择图片会在保存时自动上传为附件</div>
+        <div v-else class="attach-hint">
+          <PaperClipOutlined class="attach-hint-icon" />
+          保存后可添加附件 · 编辑器里粘贴/选择图片会在保存时自动上传为附件
+        </div>
 
         <div class="form-actions">
           <span class="form-hint">每次保存自动记录版本，可在版本历史中回滚</span>
@@ -1743,6 +1746,23 @@ onMounted(load);
 .editor-row :deep(.md-editor-toolbar-item) {
   color: var(--text-secondary);
 }
+/* 工具栏紧凑化：窄弹框内完整显示，超出可横向滚动兜底 */
+.editor-row :deep(.md-editor-toolbar-wrapper) {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.editor-row :deep(.md-editor-toolbar) {
+  flex-wrap: nowrap;
+}
+.editor-row :deep(.md-editor-toolbar-item) {
+  width: 26px;
+  height: 26px;
+  margin: 0 1px;
+}
+.editor-row :deep(.md-editor-toolbar-divider) {
+  margin: 0 4px;
+}
 
 /* 元信息条：分类 / 标签 / 可见性 / 置顶——安静芯片 */
 .meta-row {
@@ -1965,9 +1985,16 @@ onMounted(load);
 }
 .attach-empty,
 .attach-hint {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 11.5px;
   color: var(--text-tertiary);
   padding: 6px 2px;
+}
+.attach-hint-icon {
+  font-size: 12px;
+  color: var(--text-tertiary);
 }
 
 /* ===== 版本历史抽屉 ===== */
