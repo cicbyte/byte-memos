@@ -152,25 +152,26 @@ function dotColor(m: Memo): string {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 8px 10px 6px;
-  background: color-mix(in srgb, var(--bg-surface) 88%, transparent);
-  backdrop-filter: blur(6px);
-  border-radius: var(--radius-sm);
+  padding: 10px 2px 7px;
+  background: linear-gradient(to bottom, var(--bg-surface) 78%, transparent);
 }
 .tl-day-label {
-  font-size: 13px;
-  font-weight: 700;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 .tl-group.today .tl-day-label {
   color: var(--color-primary);
 }
 .tl-day-count {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-tertiary);
-  background: var(--bg-input);
-  border-radius: 10px;
-  padding: 1px 8px;
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-family: "JetBrains Mono", monospace;
 }
 
 /* 轨道：左线 + 缩进 */
@@ -238,8 +239,9 @@ function dotColor(m: Memo): string {
   color: var(--color-primary);
 }
 .tl-title {
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
+  letter-spacing: -0.2px;
   color: var(--text-primary);
 }
 .tl-tag {
@@ -251,6 +253,7 @@ function dotColor(m: Memo): string {
 .tl-excerpt {
   margin-top: 3px;
   font-size: 12px;
+  line-height: 1.6;
   color: var(--text-secondary);
   overflow: hidden;
   text-overflow: ellipsis;

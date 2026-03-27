@@ -263,8 +263,10 @@ const WEEK = ["一", "二", "三", "四", "五", "六", "日"];
 }
 .cal-title {
   flex: 1;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif;
   font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.03em;
   color: var(--text-primary);
   background: none;
   border: none;

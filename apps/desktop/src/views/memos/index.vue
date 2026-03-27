@@ -7,7 +7,7 @@
  * + 本地实时搜索 + 分类/标签筛选 + 置顶切换 + 删除（软删进回收站）。
  * 支持 ?id= 路由参数直接打开编辑（置顶页/标签页/仪表盘/全局搜索跳转目标）。
  */
-import { ref, computed, onMounted, defineAsyncComponent } from "vue";
+import { ref, computed, onMounted, defineAsyncComponent, watch, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import {
   PlusOutlined,
@@ -26,6 +26,13 @@ import {
   UploadOutlined,
   ExpandOutlined,
   SendOutlined,
+  BoldOutlined,
+  ItalicOutlined,
+  CodeOutlined,
+  LinkOutlined,
+  UnorderedListOutlined,
+  FolderOutlined,
+  CloseOutlined,
 } from "@ant-design/icons-vue";
 import { message, Modal } from "ant-design-vue";
 import "md-editor-v3/lib/style.css";
@@ -135,6 +142,7 @@ const savingQuick = ref(false);
 const quickCat = ref<string>("");
 const focused = ref(false);
 const quickEl = ref<HTMLTextAreaElement | null>(null);
+const titleInput = ref<HTMLInputElement | null>(null);
 
 /** 输入自增高（1→最多 150px），提交后复位 */
 function autoGrow() {
@@ -142,6 +150,50 @@ function autoGrow() {
   if (!el) return;
   el.style.height = "auto";
   el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+}
+
+// ----- 快速输入草稿（防误关丢失） -----
+const QUICK_DRAFT_KEY = "bm-quick-draft";
+const hasQuickDraft = ref(false);
+let quickDraftTimer: number | undefined;
+
+watch(quickText, (v) => {
+  window.clearTimeout(quickDraftTimer);
+  quickDraftTimer = window.setTimeout(() => {
+    if (v.trim()) localStorage.setItem(QUICK_DRAFT_KEY, v);
+    else localStorage.removeItem(QUICK_DRAFT_KEY);
+  }, 400);
+});
+
+onMounted(() => {
+  const d = localStorage.getItem(QUICK_DRAFT_KEY);
+  if (d && d.trim()) {
+    quickText.value = d;
+    hasQuickDraft.value = true;
+    nextTick(autoGrow);
+  }
+});
+
+function discardQuickDraft() {
+  quickText.value = "";
+  localStorage.removeItem(QUICK_DRAFT_KEY);
+  hasQuickDraft.value = false;
+}
+
+// ----- Mini Markdown 工具栏（光标处插入/包裹） -----
+function insertMd(before: string, after = "") {
+  const el = quickEl.value;
+  if (!el) return;
+  const s = el.selectionStart ?? quickText.value.length;
+  const e = el.selectionEnd ?? s;
+  const sel = quickText.value.slice(s, e);
+  quickText.value = quickText.value.slice(0, s) + before + sel + after + quickText.value.slice(e);
+  nextTick(() => {
+    el.focus();
+    const pos = s + before.length + sel.length;
+    el.setSelectionRange(pos, pos);
+    autoGrow();
+  });
 }
 
 /** 首行 ≤40 字取作标题，余下为正文；首行过长则整体作正文、截断作标题 */
@@ -182,9 +234,13 @@ async function submitQuick() {
 }
 
 function onQuickKey(e: KeyboardEvent) {
+  // IME 组合中不触发（中文输入法 Ctrl/Enter 属于组词流程）
+  if (e.isComposing || e.keyCode === 229) return;
   if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
     e.preventDefault();
     submitQuick();
+  } else if (e.key === "Escape") {
+    (e.target as HTMLTextAreaElement).blur();
   }
 }
 
@@ -223,6 +279,11 @@ const form = ref({
   tags: [] as string[],
   visibility: "PRIVATE",
   pinned: false,
+});
+
+// 弹框打开时自动聚焦标题
+watch(drawerOpen, (v) => {
+  if (v) nextTick(() => titleInput.value?.focus());
 });
 
 const VISIBILITY_OPTIONS = [
@@ -423,8 +484,61 @@ function openAdd() {
     visibility: "PRIVATE",
     pinned: false,
   };
+  // 恢复上次未完成的新建草稿
+  try {
+    const raw = localStorage.getItem(EDITOR_DRAFT_KEY);
+    if (raw) {
+      const p = JSON.parse(raw) as { t?: string; c?: string };
+      if ((p.t && p.t.trim()) || (p.c && p.c.trim())) {
+        form.value.title = p.t || "";
+        form.value.content = p.c || "";
+        message.info("已恢复上次未完成的草稿");
+      }
+    }
+  } catch {
+    /* 草稿损坏则忽略 */
+  }
   loadTags();
   drawerOpen.value = true;
+}
+
+// ----- 弹框编辑器：新建草稿 + 图片走附件（参考 memos 粘贴/拖拽上传） -----
+const EDITOR_DRAFT_KEY = "bm-editor-draft";
+const pendingUploads = ref<File[]>([]);
+
+watch(
+  () => [form.value.title, form.value.content],
+  () => {
+    if (editing.value || !drawerOpen.value) return;
+    if (form.value.title.trim() || form.value.content.trim()) {
+      localStorage.setItem(
+        EDITOR_DRAFT_KEY,
+        JSON.stringify({ t: form.value.title, c: form.value.content }),
+      );
+    }
+  },
+);
+
+async function onEditorUploadImg(files: File[], _callback: (urls: string[]) => void) {
+  if (editing.value) {
+    // 编辑已有备忘录：直接上传为附件
+    try {
+      for (const f of files) {
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        await api.attachmentUpload(editing.value.short_id, f.name, f.type || "", bytes);
+      }
+      message.success(`已存为附件（${files.length} 个）`);
+      await loadEditAttaches(editing.value.short_id);
+      loadAttachMap();
+    } catch {
+      message.error("图片上传失败");
+    }
+  } else {
+    // 新建中：先暂存，保存后统一上传
+    pendingUploads.value.push(...files);
+    message.info(`图片将在保存后上传为附件（共 ${pendingUploads.value.length} 个）`);
+  }
+  // 不回调 callback：图片不插入正文，统一走附件区展示
 }
 
 function openEdit(m: Memo) {
@@ -543,6 +657,24 @@ async function save() {
       });
       memos.value = [created, ...memos.value];
       message.success("已添加");
+      localStorage.removeItem(EDITOR_DRAFT_KEY);
+      // 冲销暂存图片 → 附件
+      if (pendingUploads.value.length) {
+        const files = pendingUploads.value;
+        pendingUploads.value = [];
+        let ok = 0;
+        for (const f of files) {
+          try {
+            const bytes = new Uint8Array(await f.arrayBuffer());
+            await api.attachmentUpload(created.short_id, f.name, f.type || "", bytes);
+            ok++;
+          } catch {
+            /* 单个失败继续 */
+          }
+        }
+        if (ok) message.success(`已上传 ${ok} 张图片附件`);
+        loadAttachMap();
+      }
     }
     drawerOpen.value = false;
     try {
@@ -651,16 +783,46 @@ onMounted(load);
               />
             </div>
             <div class="composer-toolbar">
-              <a-select
-                v-model:value="quickCat"
-                size="small"
-                placeholder="分类"
-                allow-clear
-                class="composer-cat"
-                :options="categories.map((c) => ({ value: c.name, label: `${c.name} ${c.memo_count}` }))"
-              />
+              <div class="composer-format" title="Markdown 快捷">
+                <button class="fmt-btn" title="粗体 **" @click="insertMd('**', '**')"><BoldOutlined /></button>
+                <button class="fmt-btn" title="斜体 *" @click="insertMd('*', '*')"><ItalicOutlined /></button>
+                <button class="fmt-btn" title="行内代码 `" @click="insertMd('`', '`')"><CodeOutlined /></button>
+                <button class="fmt-btn" title="链接 []()" @click="insertMd('[', '](https://)')"><LinkOutlined /></button>
+                <button class="fmt-btn" title="列表 - " @click="insertMd('- ')"><UnorderedListOutlined /></button>
+              </div>
+              <span v-if="hasQuickDraft" class="draft-chip" title="自动保存的草稿">
+                草稿已恢复
+                <button class="draft-x" title="清空草稿" @click="discardQuickDraft">×</button>
+              </span>
               <span v-if="quickText.length" class="composer-count">{{ quickText.length }} 字</span>
               <span class="composer-spacer" />
+
+              <a-dropdown :trigger="['click']">
+                <button class="cat-chip" :class="{ set: !!quickCat }" :title="quickCat ? `分类：${quickCat}` : '设置分类'">
+                  <template v-if="quickCat">
+                    <span
+                      class="cat-dot"
+                      :style="{ background: catColorMap.get(quickCat) || 'var(--color-primary)' }"
+                    />
+                    {{ quickCat }}
+                    <span class="cat-clear" title="清除分类" @click.stop="quickCat = ''"><CloseOutlined /></span>
+                  </template>
+                  <template v-else>
+                    <FolderOutlined />
+                    <span>分类</span>
+                  </template>
+                </button>
+                <template #overlay>
+                  <a-menu @click="({ key }: any) => (quickCat = key as string)">
+                    <a-menu-item v-for="c in categories" :key="c.name">
+                      <span class="cat-menu-dot" :style="{ background: catColorMap.get(c.name) || 'var(--text-tertiary)' }" />
+                      {{ c.name }}
+                      <span class="cat-menu-count">{{ c.memo_count }}</span>
+                    </a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+
               <a-tooltip title="完整编辑（标题 / 标签 / 附件 / 可见性）">
                 <button class="composer-icon" @click="expandQuick"><ExpandOutlined /></button>
               </a-tooltip>
@@ -761,35 +923,43 @@ onMounted(load);
       </div>
     </a-drawer>
 
-    <!-- 新增/编辑抽屉 -->
-    <a-drawer
+    <!-- 新增/编辑弹框 -->
+    <a-modal
       v-model:open="drawerOpen"
       :title="editing ? '编辑备忘录' : '新增备忘录'"
-      placement="right"
-      :width="720"
-      :destroy-on-close="true"
+      :width="860"
+      centered
+      :footer="null"
+      destroy-on-close
+      wrap-class-name="memo-editor-modal"
     >
       <div class="memo-form">
-        <div class="form-row">
-          <input v-model="form.title" class="form-title-input" placeholder="标题…" maxlength="200" />
-        </div>
+        <input
+          ref="titleInput"
+          v-model="form.title"
+          class="form-title-input"
+          placeholder="标题…（可留空，保存时自动取正文首行）"
+          maxlength="200"
+        />
 
         <div class="form-row editor-row">
           <MdEditor
             v-model="form.content"
             :theme="themeStore.isDark ? 'dark' : 'light'"
             language="zh-CN"
-            style="height: 420px"
-            placeholder="正文（Markdown）…"
+            style="height: 400px"
+            placeholder="正文（Markdown）…　Ctrl+S 保存 · 粘贴图片自动存为附件"
+            :footers="['markdownTotal']"
             :toolbars="['bold', 'underline', 'italic', '-', 'title', 'strikeThrough', 'sub', 'sup', 'quote', 'unorderedList', 'orderedList', 'task', '-', 'codeRow', 'code', 'link', 'image', 'table', 'mermaid', '-', 'revoke', 'next', 'save', '=', 'pageFullscreen', 'fullscreen', 'preview', 'htmlPreview', 'catalog', 'github']"
             @save="save"
+            @on-upload-img="onEditorUploadImg"
           />
         </div>
 
-        <div class="form-row form-meta-row">
+        <div class="meta-row">
           <a-auto-complete
             v-model:value="form.category"
-            style="width: 180px"
+            class="meta-ctl cat"
             placeholder="分类（可新建）"
             allow-clear
             :options="categories.map((c) => ({ value: c.name }))"
@@ -797,16 +967,17 @@ onMounted(load);
           <a-select
             v-model:value="form.tags"
             mode="tags"
-            style="min-width: 220px; flex: 1"
+            class="meta-ctl tags"
             placeholder="标签（回车确认，支持 a/b 层级）"
             :options="allTags.map((t) => ({ value: t.tag }))"
           />
-        </div>
-
-        <div class="form-row form-meta-row">
-          <a-select v-model:value="form.visibility" style="width: 140px" :options="VISIBILITY_OPTIONS" />
-          <span class="form-pin-label">置顶</span>
-          <a-switch v-model:checked="form.pinned" size="small" />
+          <span class="meta-divider" />
+          <a-select v-model:value="form.visibility" class="meta-ctl vis" :options="VISIBILITY_OPTIONS" />
+          <a-tooltip :title="form.pinned ? '已置顶' : '置顶'">
+            <button class="pin-toggle" :class="{ on: form.pinned }" @click="form.pinned = !form.pinned">
+              <PushpinFilled v-if="form.pinned" /><PushpinOutlined v-else />
+            </button>
+          </a-tooltip>
         </div>
 
         <!-- 附件（编辑已有备忘录时可用） -->
@@ -830,16 +1001,18 @@ onMounted(load);
           </div>
           <div v-else class="attach-empty">暂无附件 — 图片将显示缩略预览</div>
         </div>
-        <div v-else class="attach-hint">附件在保存后可添加（新建完成即出现附件区）</div>
+        <div v-else class="attach-hint">📁 保存后可添加附件 · 编辑器里粘贴/选择图片会在保存时自动上传为附件</div>
 
         <div class="form-actions">
-          <a-button @click="drawerOpen = false">取消</a-button>
-          <a-button type="primary" :loading="saving" @click="save">
-            {{ editing ? "保存" : "添加" }}
-          </a-button>
+          <span class="form-hint">每次保存自动记录版本，可在版本历史中回滚</span>
+          <span class="composer-spacer" />
+          <button class="btn-cancel" @click="drawerOpen = false">取消</button>
+          <button class="btn-save" :disabled="saving" @click="save">
+            {{ saving ? "保存中…" : editing ? "保存" : "添加" }}
+          </button>
         </div>
       </div>
-    </a-drawer>
+    </a-modal>
   </div>
 </template>
 
@@ -874,17 +1047,17 @@ onMounted(load);
 }
 
 .head-title {
-  font-size: 15px;
+  font-family: "Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif;
+  font-size: 15.5px;
   font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--text-primary);
 }
 
 .head-count {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-tertiary);
-  background: var(--bg-input);
-  padding: 2px 8px;
-  border-radius: 10px;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .head-search {
@@ -1001,37 +1174,37 @@ onMounted(load);
   gap: 8px;
 }
 .side-title {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   color: var(--text-tertiary);
 }
 .tag-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 .tag-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 9px;
+  padding: 2.5px 10px;
   font-size: 11.5px;
   color: var(--text-secondary);
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
+  background: transparent;
+  border: none;
   border-radius: 999px;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: background var(--transition-fast), color var(--transition-fast);
 }
 .tag-chip:hover {
-  color: var(--color-primary);
-  border-color: var(--color-primary-border);
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
 }
 .tag-chip.on {
-  color: var(--hero-cta-text, #fff);
-  background: var(--color-primary);
-  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  font-weight: 600;
 }
 .tag-count {
   font-size: 10px;
@@ -1139,19 +1312,120 @@ onMounted(load);
   padding-top: 6px;
   border-top: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
 }
-.composer-cat {
-  min-width: 0;
+.composer-format {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding-right: 6px;
+  margin-right: 2px;
+  border-right: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
 }
-.composer-cat :deep(.ant-select-selector) {
-  border: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  padding-left: 6px !important;
+.fmt-btn {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
   font-size: 12px;
-  color: var(--text-secondary);
-}
-.composer-cat :deep(.ant-select-arrow) {
   color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.fmt-btn:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+.draft-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10.5px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border-radius: 999px;
+  padding: 1.5px 4px 1.5px 8px;
+  white-space: nowrap;
+}
+.draft-x {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  font-size: 11px;
+  line-height: 1;
+  color: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.draft-x:hover {
+  background: color-mix(in srgb, var(--color-primary) 20%, transparent);
+}
+/* 分类紧凑胶囊（贴右侧，宽度自适应内容） */
+.cat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 180px;
+  height: 24px;
+  padding: 0 9px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: all var(--transition-fast);
+}
+.cat-chip:hover {
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+.cat-chip.set {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--border-light));
+  background: color-mix(in srgb, var(--color-primary) 6%, transparent);
+}
+.cat-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.cat-clear {
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-right: -3px;
+  font-size: 9px;
+  border-radius: 50%;
+  color: var(--text-tertiary);
+}
+.cat-clear:hover {
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+}
+.cat-menu-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.cat-menu-count {
+  float: right;
+  margin-left: 16px;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
 }
 .composer-count {
   font-size: 10.5px;
@@ -1404,12 +1678,11 @@ onMounted(load);
   padding: 0 6px;
 }
 
-/* ===== 编辑抽屉表单 ===== */
+/* ===== 编辑弹框表单 ===== */
 .memo-form {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  height: 100%;
 }
 
 .form-row {
@@ -1417,46 +1690,178 @@ onMounted(load);
   gap: 10px;
 }
 
+/* 标题：无边框大字（Notion 式首行） */
 .form-title-input {
-  flex: 1;
-  height: 36px;
-  padding: 0 12px;
-  font-size: 15px;
+  width: 100%;
+  padding: 2px 2px 8px;
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.2px;
   color: var(--text-primary);
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-light) 60%, transparent);
+  border-radius: 0;
   outline: none;
   transition: border-color var(--transition-fast);
 }
 .form-title-input:focus {
-  border-color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+.form-title-input::placeholder {
+  color: var(--text-tertiary);
+  font-weight: 500;
 }
 
+/* 编辑器：融入主题（透明底 + 主题色映射，修复暗色下黑块） */
 .editor-row {
-  flex: 1;
-  min-height: 0;
+  flex: none;
 }
 .editor-row :deep(.md-editor) {
-  border-radius: var(--radius-sm);
+  --md-bk-color: var(--bg-input);
+  --md-color: var(--text-primary);
+  --md-border-color: var(--border-light);
+  --md-hover-color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
-
-.form-meta-row {
-  align-items: center;
+.editor-row :deep(.md-editor .cm-editor),
+.editor-row :deep(.md-editor .cm-scroller),
+.editor-row :deep(.md-editor .cm-gutters),
+.editor-row :deep(.md-editor-toolbar-wrapper),
+.editor-row :deep(.md-editor-toolbar),
+.editor-row :deep(.md-editor-footer),
+.editor-row :deep(.md-editor-previewWrapper),
+.editor-row :deep(.md-editor-preview) {
+  background: transparent;
+}
+.editor-row :deep(.md-editor .cm-gutters) {
+  border-right: 1px solid color-mix(in srgb, var(--border-light) 60%, transparent);
+}
+.editor-row :deep(.md-editor-toolbar-item) {
+  color: var(--text-secondary);
 }
 
-.form-pin-label {
-  font-size: 12px;
-  color: var(--text-secondary);
-  margin-left: auto;
+/* 元信息条：分类 / 标签 / 可见性 / 置顶——安静芯片 */
+.meta-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--border-light) 60%, transparent);
+}
+.meta-ctl {
+  background: var(--bg-input);
+  border-radius: 8px;
+}
+.meta-ctl.cat {
+  width: 170px;
+}
+.meta-ctl.tags {
+  flex: 1;
+  min-width: 160px;
+}
+.meta-ctl.vis {
+  width: 110px;
+}
+.meta-row :deep(.ant-select .ant-select-selector),
+.meta-row :deep(.ant-select-single:not(.ant-select-customize-input) .ant-select-selector) {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-size: 12.5px;
+  padding-left: 10px;
+}
+.meta-row :deep(.ant-select-single .ant-select-selector) {
+  height: 30px !important;
+}
+.meta-row :deep(.ant-select-single .ant-select-selection-item),
+.meta-row :deep(.ant-select-single .ant-select-selection-search) {
+  line-height: 28px !important;
+}
+.meta-row :deep(.ant-select:not(.ant-select-open):hover) {
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--bg-input));
+}
+.meta-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-light);
+  flex-shrink: 0;
+}
+.pin-toggle {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  font-size: 14px;
+  color: var(--text-tertiary);
+  background: var(--bg-input);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.pin-toggle:hover {
+  color: var(--text-primary);
+}
+.pin-toggle.on {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
 }
 
 .form-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.form-hint {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+.btn-cancel {
+  height: 30px;
+  padding: 0 16px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-cancel:hover {
+  color: var(--text-primary);
+  border-color: var(--text-tertiary);
+}
+.btn-save {
+  height: 30px;
+  padding: 0 20px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--hero-cta-text, #fff);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    color-mix(in srgb, var(--color-primary) 82%, #000)
+  );
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 26%, transparent);
+  transition: filter var(--transition-fast), box-shadow var(--transition-fast);
+}
+.btn-save:hover {
+  filter: brightness(1.08);
+}
+.btn-save:disabled {
+  opacity: 0.5;
+  cursor: default;
+  box-shadow: none;
 }
 
 /* ===== 附件徽标（列表/卡片 meta） ===== */
@@ -1624,5 +2029,47 @@ onMounted(load);
   max-height: 180px;
   overflow-y: auto;
   font-family: inherit;
+}
+</style>
+
+<style>
+/* 编辑弹框：融入主题的容器（Modal teleport 到 body，须用全局样式） */
+.memo-editor-modal .ant-modal-content {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 16px;
+  padding: 0;
+  overflow: hidden;
+}
+.memo-editor-modal .ant-modal-header {
+  padding: 16px 22px 0;
+  background: transparent;
+  border: none;
+}
+.memo-editor-modal .ant-modal-title {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "STZhongsong", serif;
+  font-size: 15.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+.memo-editor-modal .ant-modal-body {
+  padding: 12px 22px 18px;
+  max-height: 76vh;
+  overflow: auto;
+}
+.memo-editor-modal .ant-modal-close {
+  top: 12px;
+  right: 16px;
+  color: var(--text-tertiary);
+}
+.memo-editor-modal .ant-modal-close:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+/* 弹框内的下拉/自动补全面板同样走主题色 */
+.memo-editor-modal .ant-select-dropdown {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
 }
 </style>
