@@ -15,6 +15,8 @@ pub mod storage;
 
 #[cfg(feature = "mcp")]
 pub mod mcp;
+#[cfg(feature = "ai")]
+pub mod ai;
 
 pub use error::{CoreError, CoreResult};
 pub use model::*;

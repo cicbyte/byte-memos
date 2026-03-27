@@ -9,6 +9,8 @@ license.workspace = true
 [features]
 # MCP 服务器（CLI 和桌面端按需启用）
 mcp = ["dep:rmcp", "dep:schemars", "dep:axum", "dep:tokio", "dep:tokio-util"]
+# AI 能力（rig-core 统一 provider 层：流式补全/多提供商；桌面端启用，CLI 可不启）
+ai = ["dep:rig-core", "dep:tokio", "dep:tokio-util", "dep:base64", "dep:windows", "dep:futures"]
 
 [dependencies]
 anyhow.workspace = true
@@ -30,3 +32,10 @@ schemars = { workspace = true, optional = true }
 axum = { version = "0.8", features = ["macros"], optional = true }
 tokio = { workspace = true, optional = true }
 tokio-util = { version = "0.7", optional = true }
+
+# AI（feature gate；rig-core 精确 pin——上游 0.x 破坏性变更频繁）
+rig-core = { version = "=0.42.0", default-features = false, features = ["reqwest", "native-tls"], optional = true }
+base64 = { version = "0.22", optional = true }
+futures = { version = "0.3", default-features = false, features = ["std"], optional = true }
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.61", features = ["Win32_Security_Cryptography", "Win32_Foundation", "Win32_System_Memory"], optional = true }

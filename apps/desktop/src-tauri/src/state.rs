@@ -1,5 +1,6 @@
-//! 应用状态：持有 core 的 ProjectService 单例 + MCP/API 服务运行状态
+//! 应用状态：持有 core 的 ProjectService 单例 + MCP/API 服务运行状态 + AI 取消注册表
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use byte_memos_core::ProjectService;
 
@@ -15,11 +16,13 @@ pub struct ApiServerState {
     pub port: u16,
 }
 
-/// 应用状态：持有 core 的 ProjectService 单例 + MCP/API 服务状态
+/// 应用状态：持有 core 的 ProjectService 单例 + MCP/API 服务状态 + AI 取消注册表
 pub struct AppState {
     pub svc: Mutex<ProjectService>,
     pub mcp: Mutex<Option<McpServerState>>,
     pub api: Mutex<Option<ApiServerState>>,
+    /// AI 流式取消注册表（requestId → CancellationToken）
+    pub ai_cancels: Mutex<HashMap<String, tokio_util::sync::CancellationToken>>,
 }
 
 impl AppState {

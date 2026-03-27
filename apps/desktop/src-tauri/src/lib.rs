@@ -43,6 +43,7 @@ pub fn run() {
             svc: Mutex::new(svc),
             mcp: Mutex::new(None),
             api: Mutex::new(None),
+            ai_cancels: Mutex::new(commands::ai::empty_cancel_registry()),
         })
         .invoke_handler(tauri::generate_handler![
             // 系统
@@ -106,6 +107,15 @@ pub fn run() {
             commands::servers::start_api_server,
             commands::servers::stop_api_server,
             commands::servers::api_server_status,
+            // AI（供应商管理 + 流式动作）
+            commands::ai::ai_provider_list,
+            commands::ai::ai_provider_add,
+            commands::ai::ai_provider_update,
+            commands::ai::ai_provider_delete,
+            commands::ai::ai_provider_check,
+            commands::ai::ai_actions,
+            commands::ai::ai_stream,
+            commands::ai::ai_stream_cancel,
         ])
         .setup(|app| {
             // 注册默认全局快捷键（CmdOrCtrl+Shift+B）；冲突时仅 warn，不阻断启动

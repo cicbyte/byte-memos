@@ -12,7 +12,9 @@ import {
   PushpinOutlined,
   EditOutlined,
   DeleteOutlined,
+  RobotOutlined,
 } from "@ant-design/icons-vue";
+import { AI_ACTIONS, TRANSLATE_LANGS } from "../aiActions";
 import type { Memo } from "@/api/types";
 
 const props = defineProps<{
@@ -24,6 +26,7 @@ const emit = defineEmits<{
   (e: "open", m: Memo): void;
   (e: "pin", m: Memo): void;
   (e: "del", m: Memo): void;
+  (e: "ai", m: Memo, action: string, lang: string): void;
 }>();
 
 interface Entry {
@@ -128,6 +131,19 @@ function dotColor(m: Memo): string {
               <PushpinFilled v-if="entry.memo.pinned" /><PushpinOutlined v-else />
             </button>
             <button class="tl-op" title="编辑" @click.stop="emit('open', entry.memo)"><EditOutlined /></button>
+            <a-dropdown :trigger="['click']">
+              <button class="tl-op" title="AI 动作" @click.stop><RobotOutlined /></button>
+              <template #overlay>
+                <a-menu
+                  @click="({ key }: any) => { const [act, l] = String(key).split(':'); emit('ai', entry.memo, act, l ?? ''); }"
+                >
+                  <a-menu-item v-for="a in AI_ACTIONS" :key="a.action">{{ a.label }}</a-menu-item>
+                  <a-sub-menu title="翻译为">
+                    <a-menu-item v-for="l in TRANSLATE_LANGS" :key="`translate:${l}`">{{ l }}</a-menu-item>
+                  </a-sub-menu>
+                </a-menu>
+              </template>
+            </a-dropdown>
             <button class="tl-op danger" title="删除" @click.stop="emit('del', entry.memo)"><DeleteOutlined /></button>
           </div>
         </div>

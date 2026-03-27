@@ -9,3 +9,4 @@ pub mod wallpaper;
 pub mod trash;
 pub mod config;
 pub mod servers;
+pub mod ai;

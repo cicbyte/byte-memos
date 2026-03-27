@@ -19,6 +19,7 @@ import { wallpaperApi } from "./wallpaper";
 import { preferencesApi } from "./preferences";
 import { mcpServerApi } from "./mcp-server";
 import { apiServerApi } from "./api-server";
+import { aiProviderApi } from "./ai";
 
 export const api = {
   ...dialogApi,
@@ -31,4 +32,5 @@ export const api = {
   ...preferencesApi,
   ...mcpServerApi,
   ...apiServerApi,
+  ...aiProviderApi,
 };

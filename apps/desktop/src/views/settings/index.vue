@@ -11,18 +11,21 @@ import {
   DatabaseOutlined,
   BgColorsOutlined,
   InfoCircleOutlined,
+  RobotOutlined,
 } from "@ant-design/icons-vue";
 import AppearanceForm from "./components/AppearanceForm.vue";
 import WallpaperSection from "./components/WallpaperSection.vue";
 import AnimationForm from "./components/AnimationForm.vue";
 import StorageSection from "./components/StorageSection.vue";
 import AboutSection from "./components/AboutSection.vue";
+import AiProviderSection from "./components/AiProviderSection.vue";
 import { useLayoutStore } from "@/stores/layout";
 
 const layout = useLayoutStore();
 
 const tabs = [
   { key: "storage", icon: DatabaseOutlined, label: "数据" },
+  { key: "ai", icon: RobotOutlined, label: "AI 供应商" },
   { key: "appearance", icon: BgColorsOutlined, label: "外观" },
   { key: "about", icon: InfoCircleOutlined, label: "关于" },
 ];
@@ -58,6 +61,9 @@ onMounted(() => {
     <div class="settings-content">
       <!-- 数据 -->
       <StorageSection v-if="activeTab === 'storage'" />
+
+      <!-- AI 供应商 -->
+      <AiProviderSection v-else-if="activeTab === 'ai'" />
 
       <!-- 外观 -->
       <section v-else-if="activeTab === 'appearance'" class="pane pane-appearance">

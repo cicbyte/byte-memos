@@ -18,6 +18,8 @@ mod versions;
 pub mod templates;
 pub mod attachments;
 pub mod stats;
+#[cfg(feature = "ai")]
+pub mod ai;
 
 #[cfg(test)]
 mod tests;

@@ -26,6 +26,13 @@ mod templates;
 mod attachments;
 mod export;
 mod trash;
+#[cfg(feature = "ai")]
+mod ai;
+#[cfg(feature = "ai")]
+pub use ai::{
+    extract_json_array, extract_json_object, parse_category, parse_tags, AddProviderInput,
+    CheckResult, ProviderItem, UpdateProviderInput,
+};
 
 // open_at 与顶层配置函数调用的 config_backup 内部 helper（对 service 可见）
 use config_backup::{ensure_config, migrate_to_data_layout, read_config, write_config};

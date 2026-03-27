@@ -33,16 +33,20 @@ import {
   UnorderedListOutlined,
   FolderOutlined,
   CloseOutlined,
+  RobotOutlined,
 } from "@ant-design/icons-vue";
 import { message, Modal } from "ant-design-vue";
 import "md-editor-v3/lib/style.css";
 import { api } from "@/api";
 import type { AttachmentInfo, Category, DailyCount, Memo, MemoVersionInfo, TagStat } from "@/api/types";
+import { useAiProviderStore } from "@/stores/aiProvider";
+import { AI_ACTIONS, TRANSLATE_LANGS, findAction, parseAiTags, parseAiCategory, splitAiTitle, type AiActionDef } from "./aiActions";
 import { attachmentObjectUrl, revokeAttachmentUrl, isImageMime, fmtSize } from "@/api/attachments";
 import { useThemeStore } from "@/stores/theme";
 import { useLayoutStore } from "@/stores/layout";
 import MemoCalendar from "./components/MemoCalendar.vue";
 import MemoTimeline from "./components/MemoTimeline.vue";
+import AiResultModal from "./components/AiResultModal.vue";
 
 /** 编辑器懒加载：1.6MB 的 md-editor-v3 只在首次打开抽屉时拉取（异步 chunk） */
 const MdEditor = defineAsyncComponent(
@@ -143,6 +147,98 @@ const quickCat = ref<string>("");
 const focused = ref(false);
 const quickEl = ref<HTMLTextAreaElement | null>(null);
 const titleInput = ref<HTMLInputElement | null>(null);
+
+// ===== AI 动作 =====
+const aiStore = useAiProviderStore();
+const aiModal = ref<{ open: boolean; memo: Memo | null; action: AiActionDef | null }>({
+  open: false,
+  memo: null,
+  action: null,
+});
+
+/** 打开 AI 动作弹框（先过就绪守卫：未配置供应商 → 提示 + 跳设置） */
+async function openAi(m: Memo, action: string, lang = "") {
+  if (!(await aiStore.ensureReady())) return;
+  aiModal.value = { open: true, memo: m, action: findAction(action, lang) };
+}
+
+/** 应用 AI 结果：替换 / 追加 / 另存为新备忘录 / 采纳标签 / 采纳分类 */
+async function onAiApply(payload: { mode: string; result: string; action: AiActionDef }) {
+  const m = aiModal.value.memo;
+  if (!m) return;
+  const { mode, result, action } = payload;
+  try {
+    if (mode === "adoptTags") {
+      const tags = [...new Set([...m.tags, ...parseAiTags(result)])];
+      const updated = await api.updateMemo(m.short_id, {
+        title: m.title,
+        content: m.content,
+        visibility: m.visibility,
+        category: m.category ?? null,
+        tags,
+        pinned: m.pinned,
+      });
+      memos.value = memos.value.map((x) => (x.short_id === m.short_id ? updated : x));
+      message.success("已采纳标签");
+    } else if (mode === "adoptCategory") {
+      const cat = parseAiCategory(result);
+      if (!cat) {
+        message.warning("AI 未给出匹配的分类");
+        return;
+      }
+      const updated = await api.updateMemo(m.short_id, {
+        title: m.title,
+        content: m.content,
+        visibility: m.visibility,
+        category: cat,
+        tags: m.tags,
+        pinned: m.pinned,
+      });
+      memos.value = memos.value.map((x) => (x.short_id === m.short_id ? updated : x));
+      message.success(`已归入「${cat}」`);
+    } else {
+      const { title: aiTitle, body } = splitAiTitle(result);
+      if (mode === "replace") {
+        const useAiTitle = action.action === "format" && aiTitle;
+        const updated = await api.updateMemo(m.short_id, {
+          title: useAiTitle ? (aiTitle as string) : m.title,
+          content: useAiTitle ? body : result,
+          visibility: m.visibility,
+          category: m.category ?? null,
+          tags: m.tags,
+          pinned: m.pinned,
+        });
+        memos.value = memos.value.map((x) => (x.short_id === m.short_id ? updated : x));
+        message.success("已替换");
+      } else if (mode === "append") {
+        const updated = await api.updateMemo(m.short_id, {
+          title: m.title,
+          content: `${m.content}\n\n${result}`,
+          visibility: m.visibility,
+          category: m.category ?? null,
+          tags: m.tags,
+          pinned: m.pinned,
+        });
+        memos.value = memos.value.map((x) => (x.short_id === m.short_id ? updated : x));
+        message.success("已追加");
+      } else if (mode === "saveNew") {
+        const created = await api.addMemo({
+          title: aiTitle ?? (m.title ? `${m.title} · ${action.label}` : `AI ${action.label}`),
+          content: aiTitle ? body : result,
+          visibility: m.visibility,
+          category: m.category ?? null,
+          tags: m.tags,
+        });
+        memos.value = [created, ...memos.value];
+        message.success("已另存为新备忘录");
+        updateFooter();
+      }
+    }
+    aiModal.value = { ...aiModal.value, open: false };
+  } catch (e) {
+    message.error(`应用失败：${e}`);
+  }
+}
 
 /** 输入自增高（1→最多 150px），提交后复位 */
 function autoGrow() {
@@ -857,6 +953,7 @@ onMounted(load);
               @open="openEdit"
               @pin="togglePin"
               @del="remove"
+              @ai="(m: Memo, act: string, lang: string) => openAi(m, act, lang)"
             />
 
             <!-- 卡片网格 -->
@@ -880,6 +977,17 @@ onMounted(load);
                     <PushpinFilled v-if="m.pinned" /><PushpinOutlined v-else />
                   </button>
                   <button class="op-btn" title="编辑" @click.stop="openEdit(m)"><EditOutlined /></button>
+                  <a-dropdown :trigger="['click']">
+                    <button class="op-btn" title="AI 动作" @click.stop><RobotOutlined /></button>
+                    <template #overlay>
+                      <a-menu @click="({ key }: any) => { const [act, l] = String(key).split(':'); openAi(m, act, l ?? ''); }">
+                        <a-menu-item v-for="a in AI_ACTIONS" :key="a.action">{{ a.label }}</a-menu-item>
+                        <a-sub-menu title="翻译为">
+                          <a-menu-item v-for="l in TRANSLATE_LANGS" :key="`translate:${l}`">{{ l }}</a-menu-item>
+                        </a-sub-menu>
+                      </a-menu>
+                    </template>
+                  </a-dropdown>
                   <button class="op-btn" title="版本历史" @click.stop="openHistory(m)"><HistoryOutlined /></button>
                   <a-dropdown :trigger="['click']">
                     <button class="op-btn" title="导出" @click.stop><DownloadOutlined /></button>
@@ -1016,6 +1124,13 @@ onMounted(load);
         </div>
       </div>
     </a-modal>
+    <!-- AI 结果弹框（流式） -->
+    <AiResultModal
+      v-model:open="aiModal.open"
+      :memo="aiModal.memo"
+      :action="aiModal.action"
+      @apply="onAiApply"
+    />
   </div>
 </template>
 
