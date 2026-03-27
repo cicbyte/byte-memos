@@ -132,6 +132,17 @@ const monthCount = computed(() => {
 
 const quickText = ref("");
 const savingQuick = ref(false);
+const quickCat = ref<string>("");
+const focused = ref(false);
+const quickEl = ref<HTMLTextAreaElement | null>(null);
+
+/** 输入自增高（1→最多 150px），提交后复位 */
+function autoGrow() {
+  const el = quickEl.value;
+  if (!el) return;
+  el.style.height = "auto";
+  el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+}
 
 /** 首行 ≤40 字取作标题，余下为正文；首行过长则整体作正文、截断作标题 */
 function splitQuick(raw: string): { title: string; body: string } {
@@ -154,11 +165,12 @@ async function submitQuick() {
       title,
       content: body,
       visibility: "PRIVATE",
-      category: filterCat.value || null,
+      category: quickCat.value || null,
       tags: filterTag.value ? [filterTag.value] : [],
     });
     memos.value = [created, ...memos.value];
     quickText.value = "";
+    if (quickEl.value) quickEl.value.style.height = "auto";
     message.success("已记下");
     loadDailyCounts();
     updateFooter();
@@ -184,7 +196,7 @@ function expandQuick() {
   form.value = {
     title: parts.title === "无标题" ? "" : parts.title,
     content: parts.body,
-    category: filterCat.value || undefined,
+    category: quickCat.value || filterCat.value || undefined,
     tags: filterTag.value ? [filterTag.value] : [],
     visibility: "PRIVATE",
     pinned: false,
@@ -624,23 +636,37 @@ onMounted(load);
 
         <!-- 主区：固定快速输入 + 筛选 chips + memo 流 -->
         <div class="main-col">
-          <div class="composer">
-            <textarea
-              v-model="quickText"
-              rows="2"
-              placeholder="记点什么…（Markdown · Ctrl+Enter 直接记下）"
-              @keydown="onQuickKey"
-            />
-            <div class="composer-foot">
-              <span class="composer-hint">首行自动作标题 · 展开可加分类/标签/附件</span>
-              <div class="composer-actions">
-                <button class="composer-btn" title="完整编辑" @click="expandQuick">
-                  <ExpandOutlined /> 展开
-                </button>
-                <button class="composer-send" :disabled="!quickText.trim() || savingQuick" @click="submitQuick">
-                  <SendOutlined /> {{ savingQuick ? "记下…" : "记下" }}
-                </button>
-              </div>
+          <div class="composer" :class="{ focused }">
+            <div class="composer-row">
+              <span class="composer-mark"><EditOutlined /></span>
+              <textarea
+                ref="quickEl"
+                v-model="quickText"
+                rows="1"
+                placeholder="记点什么…（Markdown · Ctrl+Enter 直接记下）"
+                @focus="focused = true"
+                @blur="focused = false"
+                @input="autoGrow"
+                @keydown="onQuickKey"
+              />
+            </div>
+            <div class="composer-toolbar">
+              <a-select
+                v-model:value="quickCat"
+                size="small"
+                placeholder="分类"
+                allow-clear
+                class="composer-cat"
+                :options="categories.map((c) => ({ value: c.name, label: `${c.name} ${c.memo_count}` }))"
+              />
+              <span v-if="quickText.length" class="composer-count">{{ quickText.length }} 字</span>
+              <span class="composer-spacer" />
+              <a-tooltip title="完整编辑（标题 / 标签 / 附件 / 可见性）">
+                <button class="composer-icon" @click="expandQuick"><ExpandOutlined /></button>
+              </a-tooltip>
+              <button class="composer-send" :disabled="!quickText.trim() || savingQuick" @click="submitQuick">
+                <SendOutlined /> {{ savingQuick ? "记下…" : "记下" }}
+              </button>
             </div>
           </div>
 
@@ -1055,84 +1081,131 @@ onMounted(load);
   margin: 0 auto;
   background: var(--bg-input);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 10px 12px 8px;
-  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  border-radius: var(--radius-lg, 14px);
+  padding: 12px 14px 8px;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast), background var(--transition-fast);
 }
-.composer:focus-within {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+.composer.focused {
+  border-color: color-mix(in srgb, var(--color-primary) 55%, var(--border-light));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 10%, transparent);
+  background: var(--bg-surface);
+}
+
+.composer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.composer-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 14px;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  border-radius: 10px;
+}
+.composer.focused .composer-mark {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
 }
 .composer textarea {
   display: block;
+  flex: 1;
   width: 100%;
-  min-height: 44px;
+  min-height: 34px;
   max-height: 150px;
+  padding: 6px 0 2px;
   resize: none;
   border: none;
   outline: none;
   background: transparent;
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 13.5px;
+  line-height: 1.65;
   color: var(--text-primary);
   font-family: inherit;
 }
 .composer textarea::placeholder {
   color: var(--text-tertiary);
 }
-.composer-foot {
+
+.composer-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 6px;
+  gap: 8px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--border-light) 70%, transparent);
 }
-.composer-hint {
-  font-size: 10.5px;
-  color: var(--text-tertiary);
+.composer-cat {
+  min-width: 0;
 }
-.composer-actions {
-  display: flex;
-  gap: 6px;
-}
-.composer-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 10px;
+.composer-cat :deep(.ant-select-selector) {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding-left: 6px !important;
   font-size: 12px;
   color: var(--text-secondary);
-  background: transparent;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  transition: all var(--transition-fast);
 }
-.composer-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--text-tertiary);
+.composer-cat :deep(.ant-select-arrow) {
+  color: var(--text-tertiary);
+}
+.composer-count {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", monospace;
+}
+.composer-spacer {
+  flex: 1;
+}
+.composer-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+.composer-icon:hover {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 .composer-send {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 26px;
-  padding: 0 12px;
+  height: 28px;
+  padding: 0 14px;
   font-size: 12px;
   font-weight: 600;
   color: var(--hero-cta-text, #fff);
-  background: var(--color-primary);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary),
+    color-mix(in srgb, var(--color-primary) 82%, #000)
+  );
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   cursor: pointer;
-  transition: opacity var(--transition-fast);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 26%, transparent);
+  transition: filter var(--transition-fast), box-shadow var(--transition-fast);
 }
 .composer-send:hover {
-  opacity: 0.88;
+  filter: brightness(1.08);
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--color-primary) 34%, transparent);
 }
 .composer-send:disabled {
   opacity: 0.45;
   cursor: default;
+  box-shadow: none;
 }
 
 /* ===== 筛选 chips ===== */
