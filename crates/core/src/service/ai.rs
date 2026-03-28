@@ -23,6 +23,8 @@ pub struct ProviderItem {
     /// 仅返回是否已设置，不回显明文
     pub api_key_set: bool,
     pub model: String,
+    /// 可用模型集合
+    pub models: Vec<String>,
     pub max_tokens: i64,
     pub temperature: f64,
     pub is_enabled: bool,
@@ -53,7 +55,7 @@ fn default_temperature() -> f64 {
     0.7
 }
 
-/// 更新供应商入参（api_key 为空表示保留原值）
+/// 更新供应商入参（api_key 为空表示保留原值；models=None 表示不改动模型集合）
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateProviderInput {
     pub id: i64,
@@ -65,6 +67,8 @@ pub struct UpdateProviderInput {
     pub api_key: String,
     #[serde(default)]
     pub model: String,
+    #[serde(default)]
+    pub models: Option<Vec<String>>,
     #[serde(default = "default_max_tokens")]
     pub max_tokens: i64,
     #[serde(default = "default_temperature")]
@@ -113,6 +117,7 @@ fn row_to_item(r: crate::db::ai::AiProviderRow) -> ProviderItem {
         base_url: r.base_url,
         api_key_set: !r.api_key.is_empty(),
         model: r.model,
+        models: r.models,
         max_tokens: r.max_tokens,
         temperature: r.temperature,
         is_enabled: r.is_enabled,
@@ -201,6 +206,19 @@ impl ProjectService {
             input.temperature,
             input.is_enabled,
         )?;
+        // 模型集合：None = 不改动；Some = 全量覆写（去空去重）
+        if let Some(models) = &input.models {
+            let clean: Vec<String> = {
+                let mut seen = std::collections::HashSet::new();
+                models
+                    .iter()
+                    .map(|m| m.trim().to_string())
+                    .filter(|m| !m.is_empty() && seen.insert(m.clone()))
+                    .collect()
+            };
+            let json = serde_json::to_string(&clean).context("序列化模型列表失败")?;
+            self.db.ai_provider_set_models(input.id, &json)?;
+        }
         Ok(())
     }
 

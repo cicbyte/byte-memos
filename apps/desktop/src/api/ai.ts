@@ -16,6 +16,8 @@ export interface AiProviderItem {
   base_url: string;
   api_key_set: boolean;
   model: string;
+  /** 可用模型集合（获取模型/手动添加维护） */
+  models: string[];
   max_tokens: number;
   temperature: number;
   is_enabled: boolean;
@@ -38,6 +40,8 @@ export interface AiUpdateProviderInput {
   base_url: string;
   api_key: string;
   model: string;
+  /** 缺省 = 不改动模型集合；传数组 = 全量覆写 */
+  models?: string[];
   max_tokens: number;
   temperature: number;
   is_enabled: boolean;
@@ -83,6 +87,8 @@ export const aiProviderApi = {
   update: (input: AiUpdateProviderInput) => invoke<void>("ai_provider_update", { input }),
   delete: (id: number) => invoke<void>("ai_provider_delete", { id }),
   check: (id: number) => invoke<AiCheckResult>("ai_provider_check", { id }),
+  /** 拉取该供应商的远端模型列表（不落库） */
+  models: (id: number) => invoke<string[]>("ai_provider_models", { id }),
   actions: () => invoke<AiActionInfo[]>("ai_actions"),
 };
 

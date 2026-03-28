@@ -11,6 +11,7 @@
 
 pub mod dpapi;
 pub mod factory;
+pub mod models;
 pub mod prompts;
 pub mod stream;
 

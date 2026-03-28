@@ -62,6 +62,18 @@ pub async fn ai_provider_check(
     }
 }
 
+/// 拉取供应商可用模型列表（GET /models 系端点；不落库，前端勾选后经 update 保存）
+#[tauri::command]
+pub async fn ai_provider_models(state: State<'_, AppState>, id: i64) -> Result<Vec<String>, String> {
+    let cfg = {
+        let svc = state.svc();
+        svc.ai_provider_config_by_id(id).map_err(|e| e.to_string())?
+    };
+    byte_memos_core::ai::models::fetch_model_list(&cfg)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 前端可用动作清单（驱动 AI 菜单；is_json 标记结构化输出动作）
 #[derive(serde::Serialize)]
 pub struct AiActionInfo {

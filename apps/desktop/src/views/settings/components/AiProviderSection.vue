@@ -15,6 +15,8 @@ import {
   CheckCircleFilled,
   CloseCircleFilled,
   LoadingOutlined,
+  SyncOutlined,
+  CloseOutlined,
 } from "@ant-design/icons-vue";
 import { api } from "@/api";
 import type { AiProviderItem } from "@/api/ai";
@@ -41,6 +43,16 @@ const form = reactive({
   max_tokens: 4096,
   temperature: 0.7,
 });
+
+// 模型集合（Cherry Studio 式：获取/手动添加维护，点 chip 设默认）
+const models = ref<string[]>([]);
+const fetching = ref(false);
+const fetchOpen = ref(false);
+const fetchedModels = ref<string[]>([]);
+const fetchSearch = ref("");
+const selectedFetch = ref<string[]>([]);
+const addModelsOpen = ref(false);
+const addModelsText = ref("");
 
 const current = computed(() => items.value.find((p) => p.id === selectedId.value) ?? null);
 
@@ -83,6 +95,7 @@ function syncForm() {
   form.model = p.model;
   form.max_tokens = p.max_tokens;
   form.temperature = p.temperature;
+  models.value = [...(p.models ?? [])];
   void Promise.resolve().then(() => {
     syncing = false;
   });
@@ -208,6 +221,136 @@ function providerLabel(key: string): string {
   return PROVIDER_OPTIONS.find((o) => o.value === key)?.label ?? key;
 }
 
+// ===== 模型集合管理（参考 Cherry Studio「获取模型列表」/ byte-voice ModelSettings） =====
+
+/** 全量覆写模型集合 */
+async function saveModels(list: string[]) {
+  const p = current.value;
+  if (!p) return;
+  const clean = [...new Set(list.map((m) => m.trim()).filter(Boolean))];
+  try {
+    await api.update({
+      id: p.id,
+      name: form.name.trim(),
+      base_url: form.base_url.trim(),
+      api_key: "",
+      model: form.model.trim(),
+      models: clean,
+      max_tokens: form.max_tokens,
+      temperature: form.temperature,
+      is_enabled: p.is_enabled,
+    });
+    models.value = clean;
+    p.models = clean;
+  } catch (e) {
+    message.error(`保存模型列表失败：${e}`);
+  }
+}
+
+function removeModel(name: string) {
+  const rest = models.value.filter((m) => m !== name);
+  if (form.model === name) {
+    form.model = rest[0] ?? "";
+  }
+  void saveModels(rest);
+}
+
+/** 拉取远端 /models：先静默保存，保证用最新 Key 请求（byte-voice 同款） */
+async function openFetch() {
+  const p = current.value;
+  if (!p) return;
+  await saveNow();
+  fetching.value = true;
+  fetchOpen.value = true;
+  fetchedModels.value = [];
+  selectedFetch.value = [];
+  fetchSearch.value = "";
+  try {
+    fetchedModels.value = await api.models(p.id);
+    selectedFetch.value = models.value.filter((m) => fetchedModels.value.includes(m));
+  } catch (e) {
+    message.error(`获取模型失败：${e}`);
+  } finally {
+    fetching.value = false;
+  }
+}
+
+function toggleFetchModel(m: string) {
+  const i = selectedFetch.value.indexOf(m);
+  if (i >= 0) selectedFetch.value.splice(i, 1);
+  else selectedFetch.value.push(m);
+}
+
+function toggleGroupAll(groupList: string[]) {
+  const all = groupList.every((m) => selectedFetch.value.includes(m));
+  if (all) {
+    selectedFetch.value = selectedFetch.value.filter((m) => !groupList.includes(m));
+  } else {
+    for (const m of groupList) if (!selectedFetch.value.includes(m)) selectedFetch.value.push(m);
+  }
+}
+
+function confirmFetch() {
+  const list = [...selectedFetch.value].sort();
+  if (list.length && !list.includes(form.model)) {
+    form.model = list[0];
+  }
+  void saveModels(list);
+  fetchOpen.value = false;
+  message.success(`已选择 ${list.length} 个模型`);
+}
+
+function confirmAddModels() {
+  const names = addModelsText.value.split(/[,，\n]/).map((s) => s.trim()).filter(Boolean);
+  const merged = [...models.value];
+  let added = 0;
+  for (const n of names) {
+    if (!merged.includes(n)) {
+      merged.push(n);
+      added++;
+    }
+  }
+  addModelsOpen.value = false;
+  if (added === 0) {
+    message.warning("没有新模型可添加");
+    return;
+  }
+  void saveModels(merged);
+  message.success(`已添加 ${added} 个模型`);
+}
+
+/** 模型分组（按 id 前缀，移植 byte-voice） */
+function modelGroup(modelId: string): string {
+  const parts = modelId.split(/[-_./]/);
+  if (parts.length <= 1) return "其他";
+  const prefix = (parts[0] ?? "").toLowerCase();
+  const map: Record<string, string> = {
+    gpt: "GPT", o1: "OpenAI o-series", o3: "OpenAI o-series", o4: "OpenAI o-series",
+    claude: "Claude", deepseek: "DeepSeek", qwen: "Qwen", glm: "GLM",
+    llama: "LLaMA", gemma: "Gemma", mistral: "Mistral", mixtral: "Mixtral",
+    yi: "Yi", moonshot: "Moonshot", kimi: "Kimi", mimo: "MiMo", longcat: "LongCat",
+    gemini: "Gemini", command: "Command", ernie: "文心", hunyuan: "混元",
+  };
+  for (const [k, v] of Object.entries(map)) {
+    if (prefix.includes(k)) return v;
+  }
+  return prefix.charAt(0).toUpperCase() + prefix.slice(1);
+}
+
+function groupOf(list: string[]): Record<string, string[]> {
+  const groups: Record<string, string[]> = {};
+  for (const m of list) {
+    const g = modelGroup(m);
+    (groups[g] ??= []).push(m);
+  }
+  return groups;
+}
+
+const fetchedFiltered = computed(() => {
+  const kw = fetchSearch.value.toLowerCase();
+  return kw ? fetchedModels.value.filter((m) => m.toLowerCase().includes(kw)) : fetchedModels.value;
+});
+
 onMounted(() => load());
 </script>
 
@@ -312,8 +455,38 @@ onMounted(() => load());
         </div>
 
         <div class="setting-group">
-          <div class="setting-title">模型</div>
-          <a-input v-model:value="form.model" placeholder="如 deepseek-chat / gpt-4o-mini / qwen2.5:7b" size="small" />
+          <div class="setting-title-row">
+            <span>模型</span>
+            <span class="flex1" />
+            <button class="op tight" :disabled="fetching" @click="openFetch">
+              <LoadingOutlined v-if="fetching" /><SyncOutlined v-else />
+              {{ fetching ? "获取中…" : "获取模型" }}
+            </button>
+            <button class="op tight" @click="addModelsOpen = true"><PlusOutlined /> 添加</button>
+          </div>
+          <a-auto-complete
+            v-model:value="form.model"
+            :options="models.map((m) => ({ value: m }))"
+            :filter-option="(input: string, opt: any) => String(opt.value).toLowerCase().includes(input.toLowerCase())"
+            placeholder="默认模型，如 deepseek-chat"
+            size="small"
+            allow-clear
+          />
+          <div v-if="models.length" class="model-chips">
+            <span
+              v-for="m in models"
+              :key="m"
+              class="model-chip"
+              :class="{ on: m === form.model }"
+              :title="m === form.model ? '默认模型' : '点击设为默认'"
+              @click="form.model = m"
+            >
+              <span class="chip-name">{{ m }}</span>
+              <CheckCircleFilled v-if="m === form.model" class="chip-on" />
+              <CloseOutlined class="chip-x" @click.stop="removeModel(m)" />
+            </span>
+          </div>
+          <div v-else class="model-empty">还没有模型——点「获取模型」拉取，或手动添加</div>
         </div>
 
         <div class="setting-group pair">
@@ -342,7 +515,60 @@ onMounted(() => load());
         <div class="autosave-note">{{ saving ? "保存中…" : "更改自动保存" }}</div>
       </div>
 
-      <div v-else class="empty-state">
+      <!-- 获取模型（远端 /models → 搜索 + 分组多选） -->
+      <a-modal
+        v-model:open="fetchOpen"
+        title="获取模型列表"
+        :width="560"
+        ok-text="确认选择"
+        cancel-text="取消"
+        @ok="confirmFetch"
+      >
+        <a-spin :spinning="fetching">
+          <div class="fm-search">
+            <a-input v-model:value="fetchSearch" placeholder="搜索模型…" size="small" allow-clear />
+          </div>
+          <div class="fm-hint">已选 {{ selectedFetch.length }} / {{ fetchedModels.length }} 个模型</div>
+          <div v-if="Object.keys(groupOf(fetchedFiltered)).length" class="fm-list">
+            <div v-for="(list, g) in groupOf(fetchedFiltered)" :key="g" class="fm-group">
+              <label class="fm-group-head">
+                <a-checkbox
+                  :checked="list.every((m) => selectedFetch.includes(m))"
+                  :indeterminate="list.some((m) => selectedFetch.includes(m)) && !list.every((m) => selectedFetch.includes(m))"
+                  @change.prevent="toggleGroupAll(list)"
+                />
+                <span class="fm-group-name">{{ g }}</span>
+                <span class="fm-count">{{ list.length }}</span>
+              </label>
+              <label v-for="m in list" :key="m" class="fm-item">
+                <a-checkbox :checked="selectedFetch.includes(m)" @change="toggleFetchModel(m)" />
+                <span class="fm-name">{{ m }}</span>
+              </label>
+            </div>
+          </div>
+          <div v-else-if="!fetching" class="model-empty" style="margin-top: 8px">
+            未获取到模型——请检查 API Key 与端点，或手动添加
+          </div>
+        </a-spin>
+      </a-modal>
+
+      <!-- 手动添加模型（逗号/换行批量） -->
+      <a-modal
+        v-model:open="addModelsOpen"
+        title="添加模型"
+        ok-text="添加"
+        cancel-text="取消"
+        @ok="confirmAddModels"
+      >
+        <div class="fm-hint" style="margin-bottom: 8px">支持逗号或换行分隔批量添加</div>
+        <a-textarea
+          v-model:value="addModelsText"
+          placeholder="deepseek-chat, deepseek-reasoner"
+          :auto-size="{ minRows: 2, maxRows: 5 }"
+        />
+      </a-modal>
+
+      <div v-if="!current" class="empty-state">
         <ApiOutlined class="empty-icon" />
         <p>选择左侧供应商查看配置</p>
       </div>
@@ -588,6 +814,127 @@ onMounted(() => load());
 .op.danger:hover {
   color: #ef4444;
   background: color-mix(in srgb, #ef4444 10%, transparent);
+}
+.op.tight {
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  gap: 3px;
+}
+
+/* 模型 chips */
+.model-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  border: 1px solid var(--border-light);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  max-width: 100%;
+}
+.model-chip:hover {
+  border-color: var(--text-tertiary);
+}
+.model-chip.on {
+  color: var(--color-primary);
+  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--border-light));
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+.chip-name {
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chip-on {
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.chip-x {
+  font-size: 9px;
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+.chip-x:hover {
+  opacity: 1;
+  color: #ef4444;
+}
+.model-empty {
+  margin-top: 8px;
+  padding: 14px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  border: 1px dashed var(--border-light);
+  border-radius: var(--radius-sm);
+}
+
+/* 获取模型弹框 */
+.fm-search {
+  margin-bottom: 8px;
+}
+.fm-hint {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+.fm-list {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.fm-group {
+  margin-bottom: 6px;
+}
+.fm-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--border-light);
+}
+.fm-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.fm-count {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  border-radius: 999px;
+  padding: 0 7px;
+  line-height: 15px;
+}
+.fm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 14px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+.fm-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+.fm-name {
+  font-size: 12px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  color: var(--text-primary);
+  word-break: break-all;
 }
 
 .connect-result {

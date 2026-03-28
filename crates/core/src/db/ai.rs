@@ -6,6 +6,11 @@
 use crate::CoreResult;
 use rusqlite::params;
 
+/// models_json 宽松解析：坏 JSON/非数组一律回空集
+fn parse_models_json(raw: String) -> Vec<String> {
+    serde_json::from_str::<Vec<String>>(&raw).unwrap_or_default()
+}
+
 /// 供应商行（api_key 为存储原样：dpapi: 密文或存量明文）
 #[derive(Debug, Clone)]
 pub struct AiProviderRow {
@@ -19,6 +24,8 @@ pub struct AiProviderRow {
     pub temperature: f64,
     pub is_enabled: bool,
     pub sort_order: i64,
+    /// 可用模型集合（JSON 字符串数组）
+    pub models: Vec<String>,
 }
 
 impl super::Database {
@@ -26,7 +33,7 @@ impl super::Database {
         let conn = self.lock()?;
         let mut stmt = conn.prepare(
             "SELECT id, name, provider_key, base_url, api_key, model, max_tokens, temperature, \
-             is_enabled, sort_order FROM ai_providers ORDER BY sort_order ASC, id ASC",
+             is_enabled, sort_order, models_json FROM ai_providers ORDER BY sort_order ASC, id ASC",
         )?;
         let rows = stmt
             .query_map([], |r| {
@@ -41,6 +48,7 @@ impl super::Database {
                     temperature: r.get(7)?,
                     is_enabled: r.get::<_, i64>(8)? != 0,
                     sort_order: r.get(9)?,
+                    models: parse_models_json(r.get(10).unwrap_or_default()),
                 })
             })?
             .filter_map(|r| r.ok())
@@ -147,6 +155,19 @@ impl super::Database {
         Ok(())
     }
 
+    /// 覆写模型集合（JSON 字符串数组）
+    pub fn ai_provider_set_models(&self, id: i64, models_json: &str) -> CoreResult<()> {
+        let conn = self.lock()?;
+        let affected = conn.execute(
+            "UPDATE ai_providers SET models_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            params![models_json, id],
+        )?;
+        if affected == 0 {
+            return Err(crate::CoreError::NotFound(format!("AI 供应商 id={id}")));
+        }
+        Ok(())
+    }
+
     /// 读取存储原样的 api_key（service 层据此实现「空=保留原值」）
     pub fn ai_provider_api_key(&self, id: i64) -> CoreResult<Option<String>> {
         let conn = self.lock()?;
@@ -170,7 +191,7 @@ impl super::Database {
         let v = conn
             .query_row(
                 "SELECT id, name, provider_key, base_url, api_key, model, max_tokens, temperature, \
-                 is_enabled, sort_order FROM ai_providers WHERE id = ?",
+                 is_enabled, sort_order, models_json FROM ai_providers WHERE id = ?",
                 params![id],
                 |r| {
                     Ok(AiProviderRow {
@@ -184,6 +205,7 @@ impl super::Database {
                         temperature: r.get(7)?,
                         is_enabled: r.get::<_, i64>(8)? != 0,
                         sort_order: r.get(9)?,
+                        models: parse_models_json(r.get(10).unwrap_or_default()),
                     })
                 },
             )
@@ -201,7 +223,7 @@ impl super::Database {
         let v = conn
             .query_row(
                 "SELECT id, name, provider_key, base_url, api_key, model, max_tokens, temperature, \
-                 is_enabled, sort_order FROM ai_providers WHERE is_enabled = 1 ORDER BY sort_order ASC, id ASC LIMIT 1",
+                 is_enabled, sort_order, models_json FROM ai_providers WHERE is_enabled = 1 ORDER BY sort_order ASC, id ASC LIMIT 1",
                 [],
                 |r| {
                     Ok(AiProviderRow {
@@ -215,6 +237,7 @@ impl super::Database {
                         temperature: r.get(7)?,
                         is_enabled: r.get::<_, i64>(8)? != 0,
                         sort_order: r.get(9)?,
+                        models: parse_models_json(r.get(10).unwrap_or_default()),
                     })
                 },
             )
