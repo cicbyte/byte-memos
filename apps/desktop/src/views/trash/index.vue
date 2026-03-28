@@ -28,26 +28,22 @@ function fmtDate(iso: string): string {
 
 <template>
   <div class="trash-view">
-    <!-- 顶部工具栏 -->
-    <div class="trash-toolbar">
-      <span class="trash-title">回收站</span>
-      <span class="trash-count">{{ items.length }}</span>
-      <div class="toolbar-spacer" />
-      <button class="act-btn" title="刷新" @click="load"><ReloadOutlined /></button>
-      <button
-        class="act-btn danger"
-        :disabled="!items.length"
-        @click="emptyAll"
-      >
-        <DeleteOutlined /> 清空回收站
-      </button>
-    </div>
-
-    <!-- 列表面板 -->
+    <!-- 单面板 + panel-head（对齐备忘录/附件库） -->
     <section class="panel">
       <header class="panel-head">
-        <span class="head-title">已删除备忘录</span>
-        <span class="trash-count">{{ filtered.length }}</span>
+        <span class="head-title">回收站</span>
+        <span class="head-count">{{ items.length }}</span>
+        <div class="head-spacer" />
+        <div class="head-actions">
+          <button class="act-btn" title="刷新" @click="load"><ReloadOutlined /></button>
+          <button
+            class="act-btn danger"
+            :disabled="!items.length"
+            @click="emptyAll"
+          >
+            <DeleteOutlined /> 清空回收站
+          </button>
+        </div>
       </header>
 
       <div class="panel-body" style="position:relative">

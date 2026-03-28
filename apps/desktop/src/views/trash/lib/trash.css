@@ -1,38 +1,40 @@
-/* 回收站页样式（对齐内容页的 panel 体系） */
+/* 回收站页样式（对齐内容页的 panel 体系：单面板 + panel-head） */
 
 .trash-view {
-  display: flex;
-  flex-direction: column;
   height: 100%;
-  padding: var(--spacing-md);
-  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  overflow: auto;
 }
 
-/* ============ 顶部工具栏 ============ */
-.trash-view .trash-toolbar {
+/* ============ 面板头（对齐备忘录/附件库） ============ */
+.trash-view .panel-head {
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-light);
   flex-shrink: 0;
-  height: 44px;
 }
-.trash-view .trash-title {
+.trash-view .head-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
-  min-width: 56px;
   white-space: nowrap;
 }
-.trash-view .trash-count {
-  font-size: 11px;
+.trash-view .head-count {
+  font-size: 12px;
   color: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
   background: var(--bg-input);
-  padding: 1px 7px;
+  padding: 2px 8px;
   border-radius: 10px;
 }
-.trash-view .toolbar-spacer {
+.trash-view .head-spacer {
   flex: 1;
+}
+.trash-view .head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 /* tab 选项数量（对齐收藏页 .opt-count） */
 .trash-view .opt-count {
@@ -46,29 +48,13 @@
   flex: 1;
   display: flex;
   flex-direction: column;
+  height: 100%;
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   overflow: hidden;
   min-height: 0;
   position: relative; /* EmptyState 组件 absolute 居中的定位锚点 */
-}
-.trash-view .panel-head {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  height: 44px;
-  padding: 0 var(--spacing-md);
-  border-bottom: 1px solid var(--border-light);
-  background: var(--bg-surface);
-  flex-shrink: 0;
-}
-.trash-view .head-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  line-height: 1.5;
 }
 .trash-view .panel-body {
   flex: 1;

@@ -6,7 +6,7 @@
  */
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { FileTextOutlined } from "@ant-design/icons-vue";
+import { FileTextOutlined, ReloadOutlined } from "@ant-design/icons-vue";
 import { api } from "@/api";
 import EmptyState from "@/components/common/EmptyState.vue";
 import type { Memo } from "@/api/types";
@@ -60,17 +60,15 @@ onMounted(load);
 
 <template>
   <div class="fav-view">
-    <!-- 顶部工具栏 -->
-    <div class="toolbar">
-      <span class="page-title">置顶</span>
-      <span class="count-badge">{{ items.length }}</span>
-    </div>
-
-    <!-- 列表面板 -->
+    <!-- 单面板 + panel-head（对齐备忘录/附件库） -->
     <section class="panel">
       <header class="panel-head">
-        <span class="head-title">置顶备忘录</span>
-        <span class="count-badge">{{ filtered.length }}</span>
+        <span class="head-title">置顶</span>
+        <span class="head-count">{{ items.length }}</span>
+        <div class="head-spacer" />
+        <div class="head-actions">
+          <button class="icon-action" title="刷新" @click="load"><ReloadOutlined /></button>
+        </div>
       </header>
 
       <div class="panel-body" style="position:relative">
@@ -105,63 +103,67 @@ onMounted(load);
 </template>
 
 <style scoped>
+/* ===== 页面容器（对齐备忘录/附件库） ===== */
 .fav-view {
+  height: 100%;
+  padding: var(--spacing-lg);
+  overflow: auto;
+}
+.panel {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: var(--spacing-md);
-  gap: var(--spacing-md);
-}
-
-/* 工具栏 */
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  flex-shrink: 0;
-  height: 44px;
-}
-.page-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--text-primary);
-  min-width: 56px;
-  white-space: nowrap;
-}
-.count-badge {
-  font-size: 11px;
-  color: var(--text-tertiary);
-  font-family: "JetBrains Mono", monospace;
-  background: var(--bg-input);
-  padding: 1px 7px;
-  border-radius: 10px;
-}
-
-/* 主面板 */
-.panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  min-height: 0;
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   overflow: hidden;
-  min-height: 0;
 }
 .panel-head {
   display: flex;
   align-items: center;
-  gap: var(--spacing-sm);
-  height: 44px;
-  padding: 0 var(--spacing-md);
+  gap: 10px;
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border-light);
-  background: var(--bg-surface);
   flex-shrink: 0;
 }
 .head-title {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
+}
+.head-count {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: var(--bg-input);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+.head-spacer {
+  flex: 1;
+}
+.head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.icon-action:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
 }
 .panel-body {
   flex: 1;
