@@ -24,6 +24,7 @@ mod v15_memo_relations;
 mod v16_attachments;
 mod v17_category_color;
 mod v18_ai_providers;
+mod v19_ai_provider_multi;
 
 use v01_base::migrate_v1;
 use v02_03_snippets::{migrate_v2, migrate_v3};
@@ -41,9 +42,10 @@ use v15_memo_relations::migrate_v15;
 use v16_attachments::migrate_v16;
 use v17_category_color::migrate_v17;
 use v18_ai_providers::migrate_v18;
+use v19_ai_provider_multi::migrate_v19;
 
 /// 当前 schema 版本（每次新增迁移时 +1）
-pub const CURRENT_VERSION: u32 = 18;
+pub const CURRENT_VERSION: u32 = 19;
 
 /// 在全新/既有连接上运行迁移，使其达到 CURRENT_VERSION
 pub fn run_migrations(conn: &Connection) -> CoreResult<()> {
@@ -114,6 +116,9 @@ pub fn run_migrations(conn: &Connection) -> CoreResult<()> {
     }
     if current < 18 || legacy_collision {
         migrate_v18(conn)?;
+    }
+    if current < 19 || legacy_collision {
+        migrate_v19(conn)?;
     }
 
     set_user_version(conn, CURRENT_VERSION)?;

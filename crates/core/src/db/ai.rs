@@ -49,6 +49,7 @@ impl super::Database {
     }
 
     /// 添加供应商。api_key 须已加密；is_enabled 由调用方决定（首条自动启用）。
+    /// provider_key 允许重复（内置预设多为 openai-compatible，同 key 多行是常态）。
     pub fn ai_provider_add(
         &self,
         name: &str,
@@ -61,22 +62,40 @@ impl super::Database {
         is_enabled: bool,
     ) -> CoreResult<i64> {
         let conn = self.lock()?;
-        let dup: i64 = conn.query_row(
-            "SELECT COUNT(*) FROM ai_providers WHERE provider_key = ?",
-            params![provider_key],
-            |r| r.get(0),
-        )?;
-        if dup > 0 {
-            return Err(crate::CoreError::AlreadyExists(format!(
-                "供应商标识「{provider_key}」已存在"
-            )));
-        }
         conn.execute(
             "INSERT INTO ai_providers (name, provider_key, base_url, api_key, model, max_tokens, temperature, is_enabled) \
              VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             params![name, provider_key, base_url, api_key_encrypted, model, max_tokens, temperature, is_enabled as i64],
         )?;
         Ok(conn.last_insert_rowid())
+    }
+
+    /// 内置预设种子：按名称去重插入（存在同名行则跳过）。
+    /// api_key 存空串（unprotect 明文穿透语义兼容），启用状态一律关闭。
+    /// 返回是否实际插入。
+    pub fn ai_provider_seed_if_missing(
+        &self,
+        name: &str,
+        provider_key: &str,
+        base_url: &str,
+        model: &str,
+        sort_order: i64,
+    ) -> CoreResult<bool> {
+        let conn = self.lock()?;
+        let exists: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM ai_providers WHERE name = ?",
+            params![name],
+            |r| r.get(0),
+        )?;
+        if exists > 0 {
+            return Ok(false);
+        }
+        conn.execute(
+            "INSERT INTO ai_providers (name, provider_key, base_url, api_key, model, sort_order, is_enabled) \
+             VALUES (?, ?, ?, '', ?, ?, 0)",
+            params![name, provider_key, base_url, model, sort_order],
+        )?;
+        Ok(true)
     }
 
     /// 更新供应商。api_key_encrypted 为空串表示保留原值（调用方解出原值后回传密文）。

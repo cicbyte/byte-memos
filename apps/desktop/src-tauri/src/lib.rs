@@ -18,6 +18,11 @@ use crate::state::AppState;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let svc = ProjectService::open_default().expect("无法初始化 byte-memos 数据目录");
+    // 内置 AI 供应商常驻列表（幂等种子；失败不阻塞启动）。
+    // desktop 对 core 的 ai feature 是非可选依赖，无需门控。
+    if let Err(e) = svc.ai_provider_ensure_builtins() {
+        eprintln!("内置 AI 供应商种子失败（忽略）: {e}");
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         // 全局快捷键（F13）：默认 CmdOrCtrl+Shift+B 唤起/隐藏主窗口

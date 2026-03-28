@@ -79,6 +79,32 @@ pub struct CheckResult {
     pub message: String,
 }
 
+/// 内置常用供应商预设（Cherry Studio 模式：常驻列表，按需填 Key）
+///
+/// 端点核实来源：小米 MiMo / Token Plan 来自 byte-voice src-tauri（asr/mod.rs）；
+/// GLM / GLM Coding Plan 为智谱开放平台公开端点；其余为官方 OpenAI 兼容端点。
+pub struct BuiltinProvider {
+    pub name: &'static str,
+    pub provider_key: &'static str,
+    pub base_url: &'static str,
+    pub model: &'static str,
+}
+
+pub const BUILTIN_PROVIDERS: &[BuiltinProvider] = &[
+    BuiltinProvider { name: "GLM 智谱", provider_key: "openai-compatible", base_url: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4.6" },
+    BuiltinProvider { name: "GLM Coding Plan", provider_key: "openai-compatible", base_url: "https://open.bigmodel.cn/api/coding/paas/v4", model: "glm-4.6" },
+    BuiltinProvider { name: "DeepSeek", provider_key: "openai-compatible", base_url: "https://api.deepseek.com", model: "deepseek-chat" },
+    BuiltinProvider { name: "Moonshot Kimi", provider_key: "openai-compatible", base_url: "https://api.moonshot.cn/v1", model: "kimi-k2-turbo-preview" },
+    BuiltinProvider { name: "阿里云百炼 Qwen", provider_key: "openai-compatible", base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" },
+    BuiltinProvider { name: "硅基流动 SiliconFlow", provider_key: "openai-compatible", base_url: "https://api.siliconflow.cn/v1", model: "deepseek-ai/DeepSeek-V3" },
+    BuiltinProvider { name: "小米 MiMo", provider_key: "openai-compatible", base_url: "https://api.xiaomimimo.com/v1", model: "mimo-v2.5" },
+    BuiltinProvider { name: "小米 MiMo · Token Plan", provider_key: "openai-compatible", base_url: "https://token-plan-cn.xiaomimimo.com/v1", model: "mimo-v2.5" },
+    BuiltinProvider { name: "OpenAI", provider_key: "openai-compatible", base_url: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+    BuiltinProvider { name: "Anthropic Claude", provider_key: "anthropic", base_url: "", model: "claude-sonnet-4-5" },
+    BuiltinProvider { name: "Google Gemini", provider_key: "gemini", base_url: "", model: "gemini-2.5-flash" },
+    BuiltinProvider { name: "Ollama（本地）", provider_key: "ollama", base_url: "http://localhost:11434", model: "qwen3:8b" },
+];
+
 fn row_to_item(r: crate::db::ai::AiProviderRow) -> ProviderItem {
     ProviderItem {
         id: r.id,
@@ -106,6 +132,15 @@ fn row_to_config(r: crate::db::ai::AiProviderRow) -> ProviderConfig {
 }
 
 impl ProjectService {
+    /// 启动时种子：确保内置供应商常驻列表（按名称去重，幂等）。
+    /// 用户改名/删除后下次启动会补回同名原始行（可再删，代价可忽略）。
+    pub fn ai_provider_ensure_builtins(&self) -> Result<()> {
+        for (i, b) in BUILTIN_PROVIDERS.iter().enumerate() {
+            self.db.ai_provider_seed_if_missing(b.name, b.provider_key, b.base_url, b.model, i as i64)?;
+        }
+        Ok(())
+    }
+
     /// 列出全部供应商（按 sort_order, id 排序）
     pub fn ai_provider_list(&self) -> Result<Vec<ProviderItem>> {
         Ok(self.db.ai_provider_list()?.into_iter().map(row_to_item).collect())

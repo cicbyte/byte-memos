@@ -34,7 +34,9 @@ impl ProviderConfig {
 }
 
 /// openai-compatible base_url 归一化：去空白/尾斜杠、剥已拼好的
-/// /chat/completions 端点；保证以 /v1 结尾（rig 按此拼端点）。
+/// /chat/completions 端点。
+/// - 裸域名（无路径）补 `/v1`（如 https://api.openai.com）
+/// - 已带版本路径的（…/v1、GLM …/api/paas/v4）原样信任，不再追加
 pub fn normalize_openai_base_url(base: &str) -> String {
     let mut s = base.trim().to_string();
     while s.ends_with('/') {
@@ -47,7 +49,11 @@ pub fn normalize_openai_base_url(base: &str) -> String {
             s.pop();
         }
     }
-    if !s.to_ascii_lowercase().ends_with("/v1") {
+    let has_path = s
+        .split_once("://")
+        .map(|(_, rest)| rest.contains('/'))
+        .unwrap_or(false);
+    if !has_path && !s.to_ascii_lowercase().ends_with("/v1") {
         s.push_str("/v1");
     }
     s
@@ -70,6 +76,15 @@ mod tests {
         assert_eq!(
             normalize_openai_base_url("https://x.com/v1/chat/completions/"),
             "https://x.com/v1"
+        );
+        // 带版本路径的供应商端点原样信任（GLM /v4 不追加 /v1）
+        assert_eq!(
+            normalize_openai_base_url("https://open.bigmodel.cn/api/paas/v4"),
+            "https://open.bigmodel.cn/api/paas/v4"
+        );
+        assert_eq!(
+            normalize_openai_base_url("https://api.xiaomimimo.com/v1/"),
+            "https://api.xiaomimimo.com/v1"
         );
         assert_eq!(normalize_openai_base_url("  "), "/v1");
     }

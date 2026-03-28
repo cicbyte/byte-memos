@@ -135,12 +135,13 @@ async function saveNow() {
 
 watch(form, scheduleSave, { deep: true });
 
-// ===== 添加 / 删除 / 启用 / 测试 =====
+// ===== 添加（自定义） / 删除 / 启用 / 测试 =====
 
+/** 添加自定义供应商：内置常用商已常驻列表（后端启动种子），此处只加自定义 */
 async function addProvider() {
   try {
     const id = await api.add({
-      name: "新供应商",
+      name: "自定义供应商",
       provider_key: "openai-compatible",
       base_url: "",
       api_key: "",
@@ -150,7 +151,7 @@ async function addProvider() {
     });
     checkResult.value = null;
     await load(id);
-    message.success("已添加，请在右侧填写配置");
+    message.success("已添加自定义供应商，请在右侧填写配置");
   } catch (e) {
     message.error(`添加失败：${e}`);
   }
@@ -215,7 +216,7 @@ onMounted(() => load());
     <div class="section-head">
       <h2 class="pane-title">AI 供应商</h2>
       <span class="section-hint">
-        API Key 加密存放在本机、不会回显；同一时间只有一个供应商生效（radio 点亮）。
+        常用服务商已内置（GLM / DeepSeek / 小米 MiMo 等），选中填 Key 即用；API Key 加密存放、不会回显，同一时间只有一个供应商生效。
       </span>
     </div>
 
@@ -226,7 +227,7 @@ onMounted(() => load());
           <span class="panel-title">供应商</span>
           <span class="provider-count">{{ items.length }}</span>
           <span class="flex1" />
-          <button class="add-btn" title="添加供应商" :disabled="loading" @click="addProvider">
+          <button class="add-btn" title="添加自定义供应商" :disabled="loading" @click="addProvider">
             <PlusOutlined />
           </button>
         </div>
