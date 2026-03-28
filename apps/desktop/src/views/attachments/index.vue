@@ -197,7 +197,6 @@ onMounted(load);
           name="clip"
           :text="tab === 'orphan' ? '没有未关联的附件' : '暂无此类附件'"
           :desc="tab === 'orphan' ? '所有附件都已关联到备忘录' : '在备忘录编辑抽屉里「添加附件」上传'"
-          inline
         />
 
         <!-- 媒体网格 -->
@@ -332,6 +331,7 @@ onMounted(load);
   min-height: 0;
   overflow: auto;
   padding: 10px;
+  position: relative; /* EmptyState absolute 居中锚点 */
 }
 .empty-tip {
   display: grid;

@@ -74,8 +74,6 @@ function fmtDate(iso: string): string {
             name="trash"
             text="回收站为空"
             desc="删除的备忘录会在这里保留一段时间，可随时还原"
-            size="small"
-            inline
           />
       </div>
     </section>

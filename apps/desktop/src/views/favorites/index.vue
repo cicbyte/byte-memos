@@ -95,7 +95,6 @@ onMounted(load);
             name="star"
             text="暂无置顶备忘录"
             desc="在备忘录卡片操作里选「置顶」，常用内容会出现在这里"
-            size="small"
           />
       </div>
     </section>
