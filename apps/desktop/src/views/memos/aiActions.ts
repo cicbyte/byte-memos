@@ -85,3 +85,42 @@ export function parseAiCategory(result: string): string {
   }
   return s.split("\n").map((l) => l.trim()).find((l) => l) ?? "";
 }
+
+/** 「AI 整理」产出：标题 / 标签 / 分类 三元组 */
+export interface AiOrganize {
+  title: string;
+  tags: string[];
+  category: string;
+}
+
+/** 宽松解析 {title, tags, category}（模型可能带前后缀说明文字；全空视为失败） */
+export function parseOrganize(result: string): AiOrganize {
+  const s = result.trim();
+  const start = s.indexOf("{");
+  const end = s.lastIndexOf("}");
+  if (start >= 0 && end > start) {
+    try {
+      const o = JSON.parse(s.slice(start, end + 1)) as {
+        title?: unknown;
+        tags?: unknown;
+        category?: unknown;
+      };
+      const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+      const tags = Array.isArray(o.tags)
+        ? o.tags
+            .filter((x): x is string => typeof x === "string")
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 3)
+        : [];
+      return {
+        title: str(o.title).slice(0, 120),
+        tags,
+        category: str(o.category),
+      };
+    } catch {
+      /* 落到全空 */
+    }
+  }
+  return { title: "", tags: [], category: "" };
+}

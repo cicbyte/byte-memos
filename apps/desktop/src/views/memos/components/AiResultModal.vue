@@ -17,6 +17,8 @@ const props = defineProps<{
   open: boolean;
   memo: Memo | null;
   action: AiActionDef | null;
+  /** true = 作用于编辑弹框中未保存的内容：不显示「另存为新备忘录」 */
+  editorMode?: boolean;
 }>();
 const emit = defineEmits<{
   (e: "update:open", v: boolean): void;
@@ -127,7 +129,7 @@ function scrollBottom() {
   >
     <div class="ai-body">
       <div v-if="memo" class="ai-target" :title="memo.title || memo.content.slice(0, 60)">
-        目标：{{ memo.title || memo.content.slice(0, 40) + "…" }}
+        {{ editorMode ? "目标：编辑中（未保存）" : `目标：${memo.title || memo.content.slice(0, 40) + "…"}` }}
       </div>
 
       <!-- 思考通道（有才显示） -->
@@ -159,7 +161,7 @@ function scrollBottom() {
           <span class="ai-state">{{ out.length }} 字</span>
           <span class="spacer" />
           <button class="btn-cancel" @click="close">丢弃</button>
-          <button class="btn-cancel strong" @click="apply('saveNew')">另存为新备忘录</button>
+          <button v-if="!editorMode" class="btn-cancel strong" @click="apply('saveNew')">另存为新备忘录</button>
           <button class="btn-cancel strong" @click="apply('append')">追加</button>
           <button class="btn-save" @click="apply('replace')">替换</button>
         </template>

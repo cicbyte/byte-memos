@@ -40,6 +40,7 @@ import { api } from "@/api";
 import type { AttachmentInfo, Category, DailyCount, Memo, MemoVersionInfo, TagStat } from "@/api/types";
 import { useAiProviderStore } from "@/stores/aiProvider";
 import { AI_ACTIONS, TRANSLATE_LANGS, findAction, parseAiTags, parseAiCategory, splitAiTitle, type AiActionDef } from "./aiActions";
+import { useAiOrganize, mergeTags } from "./lib/useAiOrganize";
 import { attachmentObjectUrl, revokeAttachmentUrl, isImageMime, fmtSize } from "@/api/attachments";
 import { useThemeStore } from "@/stores/theme";
 import { useLayoutStore } from "@/stores/layout";
@@ -150,6 +151,9 @@ const titleInput = ref<HTMLInputElement | null>(null);
 
 // ===== AI 动作 =====
 const aiStore = useAiProviderStore();
+const { organizing, organize } = useAiOrganize();
+/** 动作目标：card=已存备忘录（落库）；editor=编辑弹框中未保存内容（只写表单） */
+const aiTarget = ref<"card" | "editor">("card");
 const aiModal = ref<{ open: boolean; memo: Memo | null; action: AiActionDef | null }>({
   open: false,
   memo: null,
@@ -159,7 +163,75 @@ const aiModal = ref<{ open: boolean; memo: Memo | null; action: AiActionDef | nu
 /** 打开 AI 动作弹框（先过就绪守卫：未配置供应商 → 提示 + 跳设置） */
 async function openAi(m: Memo, action: string, lang = "") {
   if (!(await aiStore.ensureReady())) return;
+  aiTarget.value = "card";
   aiModal.value = { open: true, memo: m, action: findAction(action, lang) };
+}
+
+/** 编辑弹框内发起 AI 动作：作用于表单中未保存的内容 */
+async function openAiEditor(action: string, lang = "") {
+  if (!(await aiStore.ensureReady())) return;
+  const f = form.value;
+  const base = editing.value;
+  aiTarget.value = "editor";
+  aiModal.value = {
+    open: true,
+    action: findAction(action, lang),
+    memo: {
+      short_id: base?.short_id ?? "",
+      title: f.title,
+      content: f.content,
+      visibility: f.visibility,
+      pinned: f.pinned,
+      category_id: base?.category_id ?? null,
+      category: f.category ?? null,
+      tags: f.tags,
+      created_at: base?.created_at ?? "",
+      updated_at: base?.updated_at ?? "",
+      deleted_at: null,
+    },
+  };
+}
+
+/** 「AI 整理」：解析标题/标签/分类建议并写回表单（composer 与编辑弹框共用） */
+async function applyOrganize(content: string, title: string): Promise<boolean> {
+  const r = await organize(content, title, categories.value.map((c) => c.name));
+  if (!r) return false;
+  if (r.title) form.value.title = r.title;
+  if (r.tags.length) form.value.tags = mergeTags(form.value.tags, r.tags);
+  if (r.category) form.value.category = r.category;
+  message.success("已按 AI 建议填充");
+  return true;
+}
+
+/** 快速输入「AI 整理」：建议直接填充进完整编辑弹框（元信息俱全再落库） */
+async function quickOrganize() {
+  const raw = quickText.value.trim();
+  if (!raw || organizing.value) return;
+  // 先按现有规则展开（正文/首行标题），AI 建议覆盖空缺字段
+  const parts = splitQuick(raw);
+  editing.value = null;
+  form.value = {
+    title: parts.title === "无标题" ? "" : parts.title,
+    content: parts.body,
+    category: quickCat.value || filterCat.value || undefined,
+    tags: filterTag.value ? [filterTag.value] : [],
+    visibility: "PRIVATE",
+    pinned: false,
+  };
+  const ok = await applyOrganize(parts.body, parts.title === "无标题" ? "" : parts.title);
+  if (!ok && !drawerOpen.value) return; // 失败不弹窗（守卫已提示/无输出）
+  loadTags();
+  drawerOpen.value = true;
+}
+
+/** 编辑弹框 AI 菜单分发 */
+function onEditorAiMenu(key: string) {
+  if (key === "organize") {
+    void applyOrganize(form.value.content, form.value.title);
+    return;
+  }
+  const [act, l] = key.split(":");
+  void openAiEditor(act, l ?? "");
 }
 
 /** 应用 AI 结果：替换 / 追加 / 另存为新备忘录 / 采纳标签 / 采纳分类 */
@@ -167,6 +239,36 @@ async function onAiApply(payload: { mode: string; result: string; action: AiActi
   const m = aiModal.value.memo;
   if (!m) return;
   const { mode, result, action } = payload;
+  // 编辑器目标：只写表单，不落库（保存时才提交）
+  if (aiTarget.value === "editor") {
+    if (mode === "adoptTags") {
+      form.value.tags = mergeTags(form.value.tags, parseAiTags(result));
+      message.success("已采纳标签");
+    } else if (mode === "adoptCategory") {
+      const cat = parseAiCategory(result);
+      if (!cat) {
+        message.warning("AI 未给出匹配的分类");
+        return;
+      }
+      form.value.category = cat;
+      message.success(`已填充分类「${cat}」`);
+    } else if (mode === "saveNew") {
+      // 编辑器模式无「另存」语义（内容就在表单里），忽略
+      return;
+    } else {
+      const { title: aiTitle, body } = splitAiTitle(result);
+      if (mode === "replace") {
+        form.value.content = body;
+        if (action.action === "format" && aiTitle) form.value.title = aiTitle;
+        message.success("已替换正文");
+      } else if (mode === "append") {
+        form.value.content = `${form.value.content}\n\n${result}`;
+        message.success("已追加");
+      }
+    }
+    aiModal.value = { ...aiModal.value, open: false };
+    return;
+  }
   try {
     if (mode === "adoptTags") {
       const tags = [...new Set([...m.tags, ...parseAiTags(result)])];
@@ -893,6 +995,21 @@ onMounted(load);
               <span v-if="quickText.length" class="composer-count">{{ quickText.length }} 字</span>
               <span class="composer-spacer" />
 
+              <a-tooltip title="AI 整理（标题 / 标签 / 分类）">
+                <button
+                  class="composer-icon ai-organize"
+                  :class="{ busy: organizing }"
+                  :disabled="!quickText.trim() || organizing"
+                  @click="quickOrganize"
+                >
+                  <svg v-if="!organizing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                    <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+                  </svg>
+                  <LoadingOutlined v-else />
+                </button>
+              </a-tooltip>
+
               <a-dropdown :trigger="['click']">
                 <button class="cat-chip" :class="{ set: !!quickCat }" :title="quickCat ? `分类：${quickCat}` : '设置分类'">
                   <template v-if="quickCat">
@@ -1080,6 +1197,28 @@ onMounted(load);
         </div>
 
         <div class="meta-row">
+          <a-dropdown :trigger="['click']">
+            <button class="meta-ai" :disabled="!form.content.trim() || organizing" title="AI 动作（作用于当前编辑内容，保存前不落库）">
+              <svg v-if="!organizing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+              </svg>
+              <LoadingOutlined v-else />
+              <span>AI</span>
+            </button>
+            <template #overlay>
+              <a-menu @click="({ key }: any) => onEditorAiMenu(String(key))">
+                <a-menu-item key="organize">
+                  <span class="editor-ai-organize">整理元信息（标题 / 标签 / 分类）</span>
+                </a-menu-item>
+                <a-menu-divider style="margin: 4px 0" />
+                <a-menu-item v-for="a in AI_ACTIONS" :key="a.action">{{ a.label }}</a-menu-item>
+                <a-sub-menu title="翻译为">
+                  <a-menu-item v-for="l in TRANSLATE_LANGS" :key="`translate:${l}`">{{ l }}</a-menu-item>
+                </a-sub-menu>
+              </a-menu>
+            </template>
+          </a-dropdown>
           <a-auto-complete
             v-model:value="form.category"
             class="meta-ctl cat"
@@ -1144,6 +1283,7 @@ onMounted(load);
       v-model:open="aiModal.open"
       :memo="aiModal.memo"
       :action="aiModal.action"
+      :editor-mode="aiTarget === 'editor'"
       @apply="onAiApply"
     />
   </div>
@@ -1585,6 +1725,19 @@ onMounted(load);
   color: var(--color-primary);
   background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
+/* AI 整理：sparkles 主色高亮，与普通格式按钮区分 */
+.composer-icon.ai-organize {
+  color: var(--color-primary);
+}
+.composer-icon.ai-organize:disabled {
+  color: var(--text-disabled);
+  background: transparent;
+  cursor: default;
+}
+.composer-icon.ai-organize svg {
+  width: 15px;
+  height: 15px;
+}
 .composer-send {
   display: inline-flex;
   align-items: center;
@@ -1906,6 +2059,37 @@ onMounted(load);
   margin-top: 10px;
   padding-top: 10px;
   border-top: 1px solid color-mix(in srgb, var(--border-light) 60%, transparent);
+}
+/* AI 菜单触发（编辑弹框 meta 行首） */
+.meta-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.meta-ai:hover {
+  background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+}
+.meta-ai:disabled {
+  color: var(--text-disabled);
+  background: transparent;
+  border-color: var(--border-light);
+  cursor: default;
+}
+.meta-ai svg {
+  width: 14px;
+  height: 14px;
 }
 .meta-ctl {
   background: var(--bg-input);

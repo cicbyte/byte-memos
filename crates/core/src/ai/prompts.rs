@@ -15,12 +15,13 @@ pub const ACTIONS: &[&str] = &[
     "tags",
     "category",
     "todos",
+    "organize",
     "check",
 ];
 
 /// 动作是否输出 JSON（决定前端能否做 chip 采纳等结构化处理）
 pub fn is_json_action(action: &str) -> bool {
-    matches!(action, "tags" | "category")
+    matches!(action, "tags" | "category" | "organize")
 }
 
 /// 组装动作提示词
@@ -90,6 +91,22 @@ pub fn get_prompt(action: &str, content: &str, title: &str, lang: &str) -> Strin
              每条一行，使用 Markdown 任务列表语法「- [ ] 」，动词开头、具体可执行。\
              直接返回任务列表，不要任何前缀或解释。",
         ),
+        // 一次产出标题/标签/分类三元组（编辑器「AI 整理」用；lang 携带候选分类，逗号分隔）
+        "organize" => {
+            let cats = if lang.trim().is_empty() {
+                String::new()
+            } else {
+                format!("已有分类：{}\n", lang.trim())
+            };
+            format!(
+                "{title_hint}以下是备忘录内容：\n\n{content}\n\n{cats}\
+                 请为这篇备忘录整理元信息：\
+                 1. title：简短标题（20 字以内，提炼内容主旨，给不出就返回空字符串）；\
+                 2. tags：0 到 3 个简短中文标签，体现主题或用途；\
+                 3. category：若「已有分类」中有明确匹配项则原样返回该分类名，否则返回空字符串。\
+                 只返回 JSON：{{\"title\": \"...\", \"tags\": [\"...\"], \"category\": \"...\"}}，不要解释。"
+            )
+        }
         "check" => "请回复「连接正常」四个字，不要输出任何其他内容。".to_string(),
         _ => get_prompt("format", content, title, lang),
     }
@@ -116,7 +133,17 @@ mod tests {
     fn json_actions_declared() {
         assert!(is_json_action("tags"));
         assert!(is_json_action("category"));
+        assert!(is_json_action("organize"));
         assert!(!is_json_action("polish"));
+    }
+
+    #[test]
+    fn organize_carries_categories_and_schema() {
+        let p = get_prompt("organize", "内容", "", "工作,生活");
+        assert!(p.contains("已有分类：工作,生活"));
+        assert!(p.contains("\"title\""));
+        assert!(p.contains("\"tags\""));
+        assert!(p.contains("\"category\""));
     }
 
     #[test]
