@@ -12,7 +12,6 @@ import {
   PushpinOutlined,
   EditOutlined,
   DeleteOutlined,
-  RobotOutlined,
 } from "@ant-design/icons-vue";
 import { AI_ACTIONS, TRANSLATE_LANGS } from "../aiActions";
 import type { Memo } from "@/api/types";
@@ -132,7 +131,12 @@ function dotColor(m: Memo): string {
             </button>
             <button class="tl-op" title="编辑" @click.stop="emit('open', entry.memo)"><EditOutlined /></button>
             <a-dropdown :trigger="['click']">
-              <button class="tl-op" title="AI 动作" @click.stop><RobotOutlined /></button>
+              <button class="tl-op" title="AI 动作" @click.stop>
+                <svg class="tl-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                  <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+                </svg>
+              </button>
               <template #overlay>
                 <a-menu
                   @click="({ key }: any) => { const [act, l] = String(key).split(':'); emit('ai', entry.memo, act, l ?? ''); }"
@@ -309,5 +313,9 @@ function dotColor(m: Memo): string {
 }
 .tl-op.danger:hover {
   color: #ef4444;
+}
+.tl-op .tl-svg {
+  width: 14px;
+  height: 14px;
 }
 </style>

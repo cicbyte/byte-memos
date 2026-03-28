@@ -11,7 +11,6 @@ import {
   DatabaseOutlined,
   BgColorsOutlined,
   InfoCircleOutlined,
-  RobotOutlined,
 } from "@ant-design/icons-vue";
 import AppearanceForm from "./components/AppearanceForm.vue";
 import WallpaperSection from "./components/WallpaperSection.vue";
@@ -25,7 +24,7 @@ const layout = useLayoutStore();
 
 const tabs = [
   { key: "storage", icon: DatabaseOutlined, label: "数据" },
-  { key: "ai", icon: RobotOutlined, label: "AI 供应商" },
+  { key: "ai", icon: null, label: "AI 供应商" },
   { key: "appearance", icon: BgColorsOutlined, label: "外观" },
   { key: "about", icon: InfoCircleOutlined, label: "关于" },
 ];
@@ -50,7 +49,12 @@ onMounted(() => {
             :class="{ active: activeTab === tab.key }"
             @click="activeTab = tab.key"
           >
-            <component :is="tab.icon" />
+            <!-- AI 分区用自绘 sparkles（Feather 线性风格，与导航主题图标一致） -->
+            <svg v-if="!tab.icon" class="menu-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+              <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+            </svg>
+            <component :is="tab.icon" v-else />
             <span>{{ tab.label }}</span>
           </a>
         </li>
@@ -137,6 +141,12 @@ onMounted(() => {
 }
 .menu-item :deep(.anticon) {
   font-size: 15px;
+  opacity: 0.85;
+  flex-shrink: 0;
+}
+.menu-item .menu-svg {
+  width: 15px;
+  height: 15px;
   opacity: 0.85;
   flex-shrink: 0;
 }

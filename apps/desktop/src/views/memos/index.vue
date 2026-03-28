@@ -33,7 +33,6 @@ import {
   UnorderedListOutlined,
   FolderOutlined,
   CloseOutlined,
-  RobotOutlined,
 } from "@ant-design/icons-vue";
 import { message, Modal } from "ant-design-vue";
 import "md-editor-v3/lib/style.css";
@@ -978,7 +977,12 @@ onMounted(load);
                   </button>
                   <button class="op-btn" title="编辑" @click.stop="openEdit(m)"><EditOutlined /></button>
                   <a-dropdown :trigger="['click']">
-                    <button class="op-btn" title="AI 动作" @click.stop><RobotOutlined /></button>
+                    <button class="op-btn" title="AI 动作" @click.stop>
+                      <svg class="op-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+                        <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+                      </svg>
+                    </button>
                     <template #overlay>
                       <a-menu @click="({ key }: any) => { const [act, l] = String(key).split(':'); openAi(m, act, l ?? ''); }">
                         <a-menu-item v-for="a in AI_ACTIONS" :key="a.action">{{ a.label }}</a-menu-item>
@@ -1730,6 +1734,10 @@ onMounted(load);
 }
 .op-btn.danger:hover {
   color: #ef4444;
+}
+.op-btn .op-svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* ===== 卡片 ===== */
