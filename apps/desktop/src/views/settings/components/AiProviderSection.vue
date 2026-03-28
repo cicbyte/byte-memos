@@ -16,7 +16,9 @@ import {
   CloseCircleFilled,
   LoadingOutlined,
   SyncOutlined,
-  CloseOutlined,
+  SearchOutlined,
+  RightOutlined,
+  MinusOutlined,
 } from "@ant-design/icons-vue";
 import { api } from "@/api";
 import type { AiProviderItem } from "@/api/ai";
@@ -44,8 +46,10 @@ const form = reactive({
   temperature: 0.7,
 });
 
-// 模型集合（Cherry Studio 式：获取/手动添加维护，点 chip 设默认）
+// 模型集合（Cherry Studio 式：搜索 + 分组折叠列表，行点选设默认、行删/整组删）
 const models = ref<string[]>([]);
+const modelFilter = ref("");
+const collapsedGroups = ref<Set<string>>(new Set());
 const fetching = ref(false);
 const fetchOpen = ref(false);
 const fetchedModels = ref<string[]>([]);
@@ -351,6 +355,38 @@ const fetchedFiltered = computed(() => {
   return kw ? fetchedModels.value.filter((m) => m.toLowerCase().includes(kw)) : fetchedModels.value;
 });
 
+/** 模型列表视图：过滤 → 分组 → 折叠态（搜索时强制展开，沿袭 Cherry） */
+interface ModelGroupView {
+  name: string;
+  items: string[];
+  collapsed: boolean;
+  /** 整组删除后只剩默认模型时不可整删 */
+  onlyDefault: boolean;
+}
+const visibleGroups = computed<ModelGroupView[]>(() => {
+  const kw = modelFilter.value.trim().toLowerCase();
+  const list = kw ? models.value.filter((m) => m.toLowerCase().includes(kw)) : models.value;
+  return Object.entries(groupOf(list)).map(([name, items]) => ({
+    name,
+    items,
+    collapsed: kw ? false : collapsedGroups.value.has(name),
+    onlyDefault: items.length === 1 && items[0] === form.model,
+  }));
+});
+
+function toggleGroup(name: string) {
+  const next = new Set(collapsedGroups.value);
+  if (next.has(name)) next.delete(name);
+  else next.add(name);
+  collapsedGroups.value = next;
+}
+
+/** 整组移除（默认模型受保护，同 Cherry：deletable = 组内排除默认模型） */
+function removeGroup(items: string[]) {
+  const rest = models.value.filter((m) => !items.includes(m) || m === form.model);
+  void saveModels(rest);
+}
+
 onMounted(() => load());
 </script>
 
@@ -454,41 +490,6 @@ onMounted(() => load());
           />
         </div>
 
-        <div class="setting-group">
-          <div class="setting-title-row">
-            <span>模型</span>
-            <span class="flex1" />
-            <button class="op tight" :disabled="fetching" @click="openFetch">
-              <LoadingOutlined v-if="fetching" /><SyncOutlined v-else />
-              {{ fetching ? "获取中…" : "获取模型" }}
-            </button>
-            <button class="op tight" @click="addModelsOpen = true"><PlusOutlined /> 添加</button>
-          </div>
-          <a-auto-complete
-            v-model:value="form.model"
-            :options="models.map((m) => ({ value: m }))"
-            :filter-option="(input: string, opt: any) => String(opt.value).toLowerCase().includes(input.toLowerCase())"
-            placeholder="默认模型，如 deepseek-chat"
-            size="small"
-            allow-clear
-          />
-          <div v-if="models.length" class="model-chips">
-            <span
-              v-for="m in models"
-              :key="m"
-              class="model-chip"
-              :class="{ on: m === form.model }"
-              :title="m === form.model ? '默认模型' : '点击设为默认'"
-              @click="form.model = m"
-            >
-              <span class="chip-name">{{ m }}</span>
-              <CheckCircleFilled v-if="m === form.model" class="chip-on" />
-              <CloseOutlined class="chip-x" @click.stop="removeModel(m)" />
-            </span>
-          </div>
-          <div v-else class="model-empty">还没有模型——点「获取模型」拉取，或手动添加</div>
-        </div>
-
         <div class="setting-group pair">
           <label class="half">
             <span class="setting-title">max_tokens</span>
@@ -510,6 +511,93 @@ onMounted(() => load());
             size="small"
             @change="(v: any) => setEnabled(current!, Boolean(v))"
           />
+        </div>
+
+        <!-- 模型管理（放详情最下方：先连通配置，再维护模型集） -->
+        <div class="setting-group">
+          <div class="setting-title-row">
+            <span>模型管理</span>
+            <span class="flex1" />
+            <button class="op tight" :disabled="fetching" @click="openFetch">
+              <LoadingOutlined v-if="fetching" /><SyncOutlined v-else />
+              {{ fetching ? "获取中…" : "获取模型" }}
+            </button>
+            <button class="op tight" @click="addModelsOpen = true"><PlusOutlined /> 添加</button>
+          </div>
+
+          <!-- 空状态：自绘 sparkles + 引导动作（CTA 落在内容位，一眼可懂） -->
+          <div v-if="!models.length" class="ml-empty">
+            <svg class="ml-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+              <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+            </svg>
+            <div class="ml-empty-title">还没有模型</div>
+            <div class="ml-empty-desc">
+              先填写 API 端点与密钥，从服务拉取可用模型列表；<br />也可以手动录入模型 ID。之后点行即可设为默认。
+            </div>
+            <div class="ml-empty-actions">
+              <button class="ml-cta primary" :disabled="fetching" @click="openFetch">
+                <LoadingOutlined v-if="fetching" /><SyncOutlined v-else />
+                {{ fetching ? "获取中…" : "获取模型" }}
+              </button>
+              <button class="ml-cta ghost" @click="addModelsOpen = true">手动添加</button>
+            </div>
+          </div>
+
+          <!-- 模型列表：单卡片容器，搜索内嵌首行；点行设默认，默认行受保护 -->
+          <div v-else class="ml-card">
+            <div class="ml-search-row">
+              <SearchOutlined class="ml-search-icon" />
+              <input
+                v-model="modelFilter"
+                class="ml-search-input"
+                placeholder="搜索模型…"
+              />
+              <CloseOutlined
+                v-if="modelFilter"
+                class="ml-search-clear"
+                @click="modelFilter = ''"
+              />
+            </div>
+            <div v-for="g in visibleGroups" :key="g.name" class="ml-group">
+              <div class="ml-group-head" role="button" @click="toggleGroup(g.name)">
+                <RightOutlined class="ml-chev" :class="{ open: !g.collapsed }" />
+                <span class="ml-group-name">{{ g.name }}</span>
+                <span class="fm-count">{{ g.items.length }}</span>
+                <span class="flex1" />
+                <button
+                  v-if="!g.onlyDefault"
+                  class="ml-group-del"
+                  title="移除整组"
+                  @click.stop="removeGroup(g.items)"
+                >
+                  <MinusOutlined />
+                </button>
+              </div>
+              <div v-show="!g.collapsed">
+                <div
+                  v-for="m in g.items"
+                  :key="m"
+                  class="ml-row"
+                  :class="{ on: m === form.model }"
+                  :title="m === form.model ? '默认模型' : '点击设为默认'"
+                  @click="form.model = m"
+                >
+                  <span class="ml-name">{{ m }}</span>
+                  <span v-if="m === form.model" class="ml-default-tag">默认</span>
+                  <span class="flex1" />
+                  <button
+                    v-if="m !== form.model"
+                    class="ml-row-del"
+                    title="移除"
+                    @click.stop="removeModel(m)"
+                  >
+                    <MinusOutlined />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="autosave-note">{{ saving ? "保存中…" : "更改自动保存" }}</div>
@@ -822,54 +910,222 @@ onMounted(() => load());
   gap: 3px;
 }
 
-/* 模型 chips */
-.model-chips {
+/* 模型列表（Cherry Studio 式：搜索 + 分组折叠卡片 + 行悬浮删除） */
+/* 模型列表：单卡片容器（搜索内嵌首行，无额外输入框） */
+.ml-empty {
+  margin-top: 10px;
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
+  align-items: center;
   gap: 6px;
+  padding: 24px 16px 20px;
+  border: 1px dashed var(--border-base, var(--border-light));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text-primary) 2%, transparent);
+}
+.ml-empty-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--text-tertiary);
+  opacity: 0.85;
+  margin-bottom: 2px;
+}
+.ml-empty-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.ml-empty-desc {
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+.ml-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-top: 8px;
 }
-.model-chip {
+.ml-cta {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 8px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
-  border: 1px solid var(--border-light);
+  height: 26px;
+  padding: 0 14px;
+  font-size: 11.5px;
+  font-family: inherit;
   border-radius: 999px;
   cursor: pointer;
   transition: all var(--transition-fast);
-  max-width: 100%;
 }
-.model-chip:hover {
+.ml-cta.primary {
+  color: var(--hero-cta-text, #fff);
+  background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 82%, #000));
+  border: none;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
+.ml-cta.primary:hover {
+  filter: brightness(1.08);
+}
+.ml-cta.primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+  filter: none;
+}
+.ml-cta.ghost {
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-light);
+}
+.ml-cta.ghost:hover {
+  color: var(--text-primary);
   border-color: var(--text-tertiary);
 }
-.model-chip.on {
-  color: var(--color-primary);
-  border-color: color-mix(in srgb, var(--color-primary) 45%, var(--border-light));
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-}
-.chip-name {
-  font-family: "JetBrains Mono", Consolas, monospace;
-  font-size: 10.5px;
+.ml-card {
+  margin-top: 10px;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  background: var(--bg-input);
 }
-.chip-on {
-  font-size: 10px;
+.ml-search-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-light);
+}
+.ml-search-icon {
+  color: var(--text-tertiary);
+  font-size: 11px;
   flex-shrink: 0;
 }
-.chip-x {
+.ml-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+.ml-search-input::placeholder {
+  color: var(--text-tertiary);
+}
+.ml-search-clear {
   font-size: 9px;
-  opacity: 0.55;
+  color: var(--text-tertiary);
+  cursor: pointer;
   flex-shrink: 0;
 }
-.chip-x:hover {
+.ml-search-clear:hover {
+  color: var(--text-primary);
+}
+.ml-group + .ml-group {
+  border-top: 1px solid var(--border-light);
+}
+.ml-group-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+.ml-group-head:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+.ml-chev {
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform var(--transition-fast);
+}
+.ml-chev.open {
+  transform: rotate(90deg);
+}
+.ml-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.ml-group-del {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+.ml-group-head:hover .ml-group-del {
   opacity: 1;
+}
+.ml-group-del:hover {
   color: #ef4444;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+}
+.ml-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px 5px 24px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.ml-row:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+.ml-row.on {
+  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+}
+.ml-name {
+  font-size: 12px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+.ml-row.on .ml-name {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+.ml-default-tag {
+  font-size: 9.5px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
+  flex-shrink: 0;
+}
+.ml-row-del {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.ml-row:hover .ml-row-del {
+  opacity: 1;
+}
+.ml-row-del:hover {
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
 }
 .model-empty {
   margin-top: 8px;
