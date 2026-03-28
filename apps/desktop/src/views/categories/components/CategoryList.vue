@@ -160,9 +160,9 @@ watch(
     <template #empty>
       <EmptyState
         v-if="!categories.length && !loading"
-        :icon="FolderOutlined"
+        name="folder"
         text="暂无分类"
-        hint="在上方输入名称创建"
+        desc="在上方输入名称创建，把备忘录归组管理"
       />
     </template>
   </Panel>

@@ -211,7 +211,7 @@ onMounted(async () => {
             @click="router.push('/tags')"
           >#{{ t.tag }}</span>
         </div>
-        <EmptyState v-else text="暂无标签" size="small" inline class="chart-empty" />
+        <EmptyState v-else name="tag" text="暂无标签" size="small" inline class="chart-empty" />
       </div>
     </div>
 
@@ -241,7 +241,7 @@ onMounted(async () => {
             </span>
           </div>
         </div>
-        <EmptyState v-else-if="!loading" text="还没有备忘录" size="small" inline class="chart-empty" />
+        <EmptyState v-else-if="!loading" name="memo" text="还没有备忘录" size="small" inline class="chart-empty" />
       </div>
 
       <div class="panel">
@@ -260,7 +260,7 @@ onMounted(async () => {
             <span class="view-name">{{ b.title || "(无标题)" }}</span>
             <span class="view-count"><PushpinOutlined /></span>
           </div>
-          <EmptyState v-if="!pinnedList.length" text="暂无置顶" size="small" inline class="chart-empty" />
+          <EmptyState v-if="!pinnedList.length" name="star" text="暂无置顶" size="small" inline class="chart-empty" />
         </div>
       </div>
     </div>

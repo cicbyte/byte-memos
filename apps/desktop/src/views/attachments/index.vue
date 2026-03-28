@@ -23,6 +23,7 @@ import { api } from "@/api";
 import type { AttachmentOverview } from "@/api/types";
 import { attachmentObjectUrl, revokeAttachmentUrl, fmtSize } from "@/api/attachments";
 import { useLayoutStore } from "@/stores/layout";
+import EmptyState from "@/components/common/EmptyState.vue";
 
 const router = useRouter();
 const layout = useLayoutStore();
@@ -191,9 +192,13 @@ onMounted(load);
 
       <div class="panel-body">
         <div v-if="loading" class="empty-tip">加载中…</div>
-        <div v-else-if="!filtered.length" class="empty-tip">
-          {{ tab === "orphan" ? "没有未关联的附件" : "暂无此类附件 — 在备忘录编辑抽屉里「添加附件」上传" }}
-        </div>
+        <EmptyState
+          v-else-if="!filtered.length"
+          name="clip"
+          :text="tab === 'orphan' ? '没有未关联的附件' : '暂无此类附件'"
+          :desc="tab === 'orphan' ? '所有附件都已关联到备忘录' : '在备忘录编辑抽屉里「添加附件」上传'"
+          inline
+        />
 
         <!-- 媒体网格 -->
         <template v-else-if="tab === 'media'">

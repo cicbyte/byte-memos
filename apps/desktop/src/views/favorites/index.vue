@@ -6,7 +6,7 @@
  */
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
-import { FileTextOutlined, PushpinOutlined } from "@ant-design/icons-vue";
+import { FileTextOutlined } from "@ant-design/icons-vue";
 import { api } from "@/api";
 import EmptyState from "@/components/common/EmptyState.vue";
 import type { Memo } from "@/api/types";
@@ -94,9 +94,9 @@ onMounted(load);
 
           <EmptyState
             v-if="!filtered.length && !loading"
-            :icon="PushpinOutlined"
+            name="star"
             text="暂无置顶备忘录"
-            hint="在备忘录页点击 📌 置顶常用备忘录"
+            desc="在备忘录卡片操作里选「置顶」，常用内容会出现在这里"
             size="small"
           />
       </div>

@@ -46,6 +46,7 @@ import { useLayoutStore } from "@/stores/layout";
 import MemoCalendar from "./components/MemoCalendar.vue";
 import MemoTimeline from "./components/MemoTimeline.vue";
 import AiResultModal from "./components/AiResultModal.vue";
+import EmptyState from "@/components/common/EmptyState.vue";
 
 /** 编辑器懒加载：1.6MB 的 md-editor-v3 只在首次打开抽屉时拉取（异步 chunk） */
 const MdEditor = defineAsyncComponent(
@@ -937,12 +938,22 @@ onMounted(load);
 
           <div class="flow">
             <div v-if="loading" class="memo-empty">加载中…</div>
-            <div v-else-if="!memos.length" class="memo-empty hero-empty">
-              <EditOutlined class="empty-icon" />
-              <p class="empty-title">还没有备忘录</p>
-              <p class="empty-sub">在上面记下第一笔 · Ctrl+Enter 秒记</p>
-            </div>
-            <div v-else-if="!filtered.length" class="memo-empty">无匹配备忘录 — 试试清空筛选</div>
+            <EmptyState
+              v-else-if="!memos.length"
+              name="memo"
+              text="还没有备忘录"
+              desc="在上面记下第一笔 · Ctrl+Enter 秒记"
+              inline
+            />
+            <EmptyState
+              v-else-if="!filtered.length"
+              name="search"
+              text="无匹配备忘录"
+              desc="换个关键词，或清掉筛选条件再试"
+              action-text="清空筛选"
+              @action="clearFilters"
+              inline
+            />
 
             <!-- 时间轴流（默认） -->
             <MemoTimeline

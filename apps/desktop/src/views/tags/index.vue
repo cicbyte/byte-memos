@@ -95,9 +95,9 @@ onMounted(loadTags);
       <template #empty>
         <EmptyState
           v-if="!tags.length && !loading"
-          :icon="TagsOutlined"
+          name="tag"
           text="暂无标签"
-          hint="在备忘录编辑时添加标签"
+          desc="在备忘录编辑时输入 #标签，会汇总在这里"
         />
       </template>
     </Panel>
@@ -129,7 +129,7 @@ onMounted(loadTags);
 
         <EmptyState
           v-if="!totalCount && !detailLoading"
-          :icon="TagsOutlined"
+          name="memo"
           text="无关联备忘录"
           size="small"
           inline
@@ -138,9 +138,9 @@ onMounted(loadTags);
 
       <template v-if="!selectedTag" #empty>
         <EmptyState
-          :icon="TagsOutlined"
+          name="tag"
           text="从左侧选择标签"
-          hint="查看该标签关联的备忘录"
+          desc="查看该标签关联的备忘录"
         />
       </template>
     </Panel>

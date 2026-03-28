@@ -20,6 +20,7 @@ import {
   RightOutlined,
   MinusOutlined,
 } from "@ant-design/icons-vue";
+import EmptyState from "@/components/common/EmptyState.vue";
 import { api } from "@/api";
 import type { AiProviderItem } from "@/api/ai";
 
@@ -656,9 +657,8 @@ onMounted(() => load());
         />
       </a-modal>
 
-      <div v-if="!current" class="empty-state">
-        <ApiOutlined class="empty-icon" />
-        <p>选择左侧供应商查看配置</p>
+      <div v-if="!current" class="detail-empty">
+        <EmptyState name="sparkles" text="选择左侧供应商查看配置" desc="内置了常用 provider，也可以右上角 + 新建" />
       </div>
     </div>
   </section>
@@ -1279,22 +1279,11 @@ onMounted(() => load());
   user-select: none;
 }
 
-/* 空态 */
-.empty-state {
+/* 空态（共享 EmptyState 组件的容器） */
+.detail-empty {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  color: var(--text-tertiary);
-}
-.empty-icon {
-  font-size: 30px;
-  opacity: 0.3;
-}
-.empty-state p {
-  font-size: 12.5px;
-  margin: 0;
 }
 </style>

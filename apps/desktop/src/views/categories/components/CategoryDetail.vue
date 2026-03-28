@@ -82,7 +82,14 @@ function excerpt(m: Memo, max = 80): string {
 
         <!-- 备忘录 tab -->
         <div v-else-if="detailTab === 'memos'" class="tab-list-body">
-          <div v-if="!previewMemos.length" class="tab-empty">该分类下暂无备忘录</div>
+          <EmptyState
+            v-if="!previewMemos.length"
+            name="memo"
+            text="该分类下暂无备忘录"
+            desc="编辑备忘录时选择此分类即可归入"
+            size="small"
+            inline
+          />
           <PreviewItem
             v-for="m in previewMemos"
             :key="m.short_id"
@@ -96,9 +103,9 @@ function excerpt(m: Memo, max = 80): string {
 
     <template v-if="!selected" #empty>
       <EmptyState
-        :icon="FolderOutlined"
+        name="folder"
         text="从左侧选择分类查看概览"
-        :hint="!categories.length ? '或先在左侧创建一个分类' : ''"
+        :desc="!categories.length ? '或先在左侧创建一个分类' : ''"
       />
     </template>
   </Panel>
