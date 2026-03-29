@@ -8,10 +8,13 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 
 class MemoCard extends StatelessWidget {
-  const MemoCard({super.key, required this.memo, required this.onTap});
+  const MemoCard({super.key, required this.memo, required this.onTap, this.onLongPress});
 
   final Memo memo;
   final VoidCallback onTap;
+
+  /// 长按 → 快捷菜单（置顶/可见性，F11）
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) {
@@ -20,6 +23,7 @@ class MemoCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
+      onLongPress: onLongPress,
       child: GlassContainer(
         tier: GlassTier.flat,
         preference: GlassPreference.auto, // flat 不受省电档影响（本来就是 0 blur）

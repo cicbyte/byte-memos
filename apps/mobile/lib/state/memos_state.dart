@@ -213,3 +213,30 @@ final statsProvider = FutureProvider<StatsOverview>((ref) async {
   if (client == null) throw const BmApiException(0, '离线');
   return client.stats();
 });
+
+/// 记录活跃度：今日新增 + 连续记录天数（F12）
+/// 取最近 500 条按「天」聚合；连续天数从今天（或昨天）往前数有记录的天。
+final streakProvider = FutureProvider<({int today, int streak})>((ref) async {
+  ref.watch(memosProvider.select((s) => s.lastSyncAt));
+  final client = ref.watch(connProvider).client;
+  if (client == null) throw const BmApiException(0, '离线');
+  final memos = await client.listMemos(limit: 500);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final days = <DateTime>{};
+  var todayCount = 0;
+  for (final m in memos) {
+    final dt = DateTime.tryParse(m.createdAt);
+    if (dt == null) continue;
+    final d = DateTime(dt.year, dt.month, dt.day);
+    days.add(d);
+    if (d == today) todayCount++;
+  }
+  var streak = 0;
+  var cursor = days.contains(today) ? today : today.subtract(const Duration(days: 1));
+  while (days.contains(cursor)) {
+    streak++;
+    cursor = cursor.subtract(const Duration(days: 1));
+  }
+  return (today: todayCount, streak: streak);
+});

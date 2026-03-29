@@ -166,6 +166,7 @@ class _FlowList extends ConsumerWidget {
                 child: MemoCard(
                   memo: pinned[idx],
                   onTap: () => _openDetail(context, ref, pinned[idx]),
+                  onLongPress: () => _quickActions(context, ref, pinned[idx]),
                 ),
               );
             }
@@ -183,6 +184,7 @@ class _FlowList extends ConsumerWidget {
                 child: MemoCard(
                   memo: m,
                   onTap: () => _openDetail(context, ref, m),
+                  onLongPress: () => _quickActions(context, ref, m),
                 ),
               );
             }
@@ -211,6 +213,69 @@ class _FlowList extends ConsumerWidget {
 
   void _openDetail(BuildContext context, WidgetRef ref, Memo m) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => DetailPage(memoId: m.shortId)));
+  }
+
+  /// F11：长按快捷菜单（置顶 / 公开-私有）
+  void _quickActions(BuildContext context, WidgetRef ref, Memo m) {
+    final client = ref.read(connProvider).client;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final isPublic = m.visibility == 'PUBLIC';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => GlassContainer(
+        tier: GlassTier.thick,
+        preference: ref.read(glassPrefProvider),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 14),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12, top: 8, bottom: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    m.title.isEmpty ? '快捷操作' : m.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 12, color: (dark ? Colors.white : Colors.black87).withValues(alpha: 0.55)),
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: Icon(m.pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 20),
+                title: Text(m.pinned ? '取消置顶' : '置顶', style: const TextStyle(fontSize: 14)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final updated = await client!.togglePinned(m.shortId);
+                    ref.read(memosProvider.notifier).upsert(updated);
+                  } catch (_) {}
+                },
+              ),
+              ListTile(
+                leading: Icon(isPublic ? Icons.lock_outline_rounded : Icons.public_rounded, size: 20),
+                title: Text(isPublic ? '设为私有' : '设为公开', style: const TextStyle(fontSize: 14)),
+                subtitle: Text(isPublic ? '仅自己可见' : '公开分享', style: const TextStyle(fontSize: 11)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    final updated = await client!.updateMemo(
+                      m.shortId,
+                      visibility: isPublic ? 'PRIVATE' : 'PUBLIC',
+                    );
+                    ref.read(memosProvider.notifier).upsert(updated);
+                  } catch (_) {}
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   int _count(List<Memo> pinned, Map<String, List<Memo>> groups, MemosState memos) {
