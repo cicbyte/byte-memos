@@ -18,6 +18,7 @@ import { useWallpaperStore } from "@/stores/wallpaper";
 import Navbar from "./Navbar.vue";
 import Sidebar from "./Sidebar.vue";
 import MainContent from "./MainContent.vue";
+import AiSidebar from "./AiSidebar.vue";
 
 const layout = useLayoutStore();
 const wallpaper = useWallpaperStore();
@@ -63,6 +64,8 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
+    <!-- AI 侧边栏（全局滑出，不挤压内容布局） -->
+    <AiSidebar />
   </div>
 </template>
 

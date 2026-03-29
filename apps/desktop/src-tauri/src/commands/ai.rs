@@ -203,6 +203,103 @@ pub async fn ai_stream(
     }
 }
 
+/// AI 侧边栏多轮对话：messages 为完整会话（最后一条须为用户消息），
+/// 其余按序作为历史注入请求。返回聚合全文。
+#[derive(serde::Deserialize)]
+pub struct ChatMsg {
+    pub role: String,
+    pub content: String,
+}
+
+#[tauri::command]
+pub async fn ai_chat_stream(
+    state: State<'_, AppState>,
+    messages: Vec<ChatMsg>,
+    request_id: String,
+    on_chunk: Channel<StreamChunk>,
+) -> Result<String, String> {
+    let (cfg, history, user) = {
+        let svc = state.svc();
+        let cfg = svc
+            .enabled_ai_provider_config()
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "未配置启用的 AI 供应商，请先在设置中配置".to_string())?;
+        let mut turns: Vec<(bool, String)> = messages
+            .iter()
+            .filter(|m| !m.content.trim().is_empty())
+            .map(|m| (m.role != "assistant", m.content.clone()))
+            .collect();
+        // 容错：丢弃开头的助手消息（正常序列不会出现）
+        while turns.first().map(|(is_user, _)| !*is_user).unwrap_or(false) {
+            turns.remove(0);
+        }
+        let user = match turns.pop() {
+            Some((true, c)) => c,
+            _ => return Err("会话最后一条必须是用户消息".to_string()),
+        };
+        drop(svc);
+        (cfg, turns, user)
+    };
+    let system = "你是 byte-memos 备忘录应用内置的 AI 助手。用简体中文简洁回答，\
+                  可使用 Markdown 排版。你有内置工具可以查询与操作用户的备忘录\
+                  （搜索、列出、读取、创建、更新、删除、分类/标签/统计），\
+                  涉及用户数据的问题优先调用工具获取真实数据，不要编造；\
+                  用户明确要求记录/保存时用 create_memo。";
+
+    let token = register_cancel(&state, &request_id);
+    let chan = on_chunk.clone();
+    // 工具执行：锁内同步调用 ProjectService（不跨 await 持锁）
+    let svc_state = state.clone();
+    let execute = move |exec: &byte_memos_core::ai::stream::ToolExec| {
+        let svc = svc_state.svc();
+        byte_memos_core::ai::tools::execute(&svc, exec)
+    };
+    let result = byte_memos_core::ai::stream::run_agent_stream(
+        &cfg,
+        system,
+        &history,
+        &user,
+        byte_memos_core::ai::tools::definitions(),
+        execute,
+        &mut |token_delta: &str, thinking: &str, tool: Option<&byte_memos_core::ai::stream::ToolExec>| {
+            if let Some(t) = tool {
+                let _ = chan.send(StreamChunk::Tool { name: t.name.clone(), args: t.args_json.clone() });
+                return;
+            }
+            if !thinking.is_empty() {
+                let _ = chan.send(StreamChunk::Thinking { content: thinking.to_string() });
+            }
+            if !token_delta.is_empty() {
+                let _ = chan.send(StreamChunk::Token { content: token_delta.to_string() });
+            }
+        },
+        &token,
+    )
+    .await;
+
+    state
+        .ai_cancels
+        .lock()
+        .expect("ai_cancels poisoned")
+        .remove(&request_id);
+
+    match result {
+        Ok(full) => {
+            let _ = on_chunk.send(StreamChunk::Done { full: full.clone() });
+            Ok(full)
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            if msg == byte_memos_core::ai::stream::CANCELLED_MSG {
+                Err(byte_memos_core::ai::stream::CANCELLED_MSG.to_string())
+            } else {
+                let _ = on_chunk.send(StreamChunk::Error { message: msg.clone() });
+                Err(msg)
+            }
+        }
+    }
+}
+
 /// 供 lib.rs 组装 AppState 的取消注册表初值
 pub fn empty_cancel_registry() -> HashMap<String, CancellationToken> {
     HashMap::new()

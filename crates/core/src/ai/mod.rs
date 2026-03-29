@@ -14,6 +14,7 @@ pub mod factory;
 pub mod models;
 pub mod prompts;
 pub mod stream;
+pub mod tools;
 
 use serde::Serialize;
 
@@ -27,6 +28,8 @@ pub enum StreamChunk {
     Token { content: String },
     /// 思考通道增量（DeepSeek R 系 / Gemini thinking；无则不推）
     Thinking { content: String },
+    /// 工具调用发起（侧边栏 agent 循环；前端展示「正在执行工具」）
+    Tool { name: String, args: String },
     /// 流结束（full = 聚合全文）
     Done { full: String },
     /// 流内错误（取消完成时不发 Error，静默收尾）

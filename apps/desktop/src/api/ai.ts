@@ -61,6 +61,7 @@ export interface AiActionInfo {
 export type AiStreamChunk =
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
+  | { type: "tool"; name: string; args: string }
   | { type: "done"; full: string }
   | { type: "error"; message: string };
 
@@ -128,4 +129,37 @@ export function streamAi(input: AiStreamInput, onChunk: (chunk: AiStreamChunk) =
 /** 判断错误是否为用户取消（非真错误，不弹错误提示） */
 export function isCancelledError(e: unknown): boolean {
   return e instanceof Error && e.message === CANCELLED_MSG;
+}
+
+// ===== 侧边栏多轮对话 =====
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/** 多轮流式对话：messages 为完整会话（最后一条须为用户消息），返回聚合全文 */
+export function streamChat(
+  messages: ChatTurn[],
+  onChunk: (chunk: AiStreamChunk) => void,
+): StreamHandle {
+  const requestId = crypto.randomUUID();
+  const channel = new Channel<AiStreamChunk>();
+  channel.onmessage = onChunk;
+
+  let localReject: ((reason: unknown) => void) | null = null;
+  const done = new Promise<string>((resolve, reject) => {
+    localReject = reject;
+    invoke<string>("ai_chat_stream", { messages, requestId, onChunk: channel })
+      .then(resolve)
+      .catch((e) => reject(e instanceof Error ? e : new Error(String(e))));
+  });
+
+  return {
+    done,
+    cancel: () => {
+      void invoke("ai_stream_cancel", { requestId }).catch(() => {});
+      localReject?.(new Error(CANCELLED_MSG));
+    },
+  };
 }

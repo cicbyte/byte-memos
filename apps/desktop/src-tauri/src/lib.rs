@@ -121,6 +121,7 @@ pub fn run() {
             commands::ai::ai_provider_models,
             commands::ai::ai_actions,
             commands::ai::ai_stream,
+            commands::ai::ai_chat_stream,
             commands::ai::ai_stream_cancel,
         ])
         .setup(|app| {

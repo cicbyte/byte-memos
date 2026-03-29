@@ -20,6 +20,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useThemeStore } from "@/stores/theme";
 import { useLayoutStore } from "@/stores/layout";
+import { useAiChatStore } from "@/stores/aiChat";
 import { api } from "@/api";
 import type { UnifiedSearchHit, ItemType } from "@/api/types";
 
@@ -27,6 +28,7 @@ const route = useRoute();
 const router = useRouter();
 const themeStore = useThemeStore();
 const layout = useLayoutStore();
+const aiChat = useAiChatStore();
 const q = ref("");
 const appWindow = getCurrentWindow();
 
@@ -178,6 +180,17 @@ const breadcrumbItems = computed(() => {
     </div>
 
     <div class="navbar-right" data-tauri-drag-region>
+      <button
+        class="icon-btn"
+        :class="{ 'ai-on': aiChat.open }"
+        title="AI 助手"
+        @click="aiChat.toggle()"
+      >
+        <svg class="theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+          <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
+        </svg>
+      </button>
       <button
         class="icon-btn"
         :title="themeStore.isDark ? '切换到浅色' : '切换到深色'"
@@ -423,6 +436,11 @@ const breadcrumbItems = computed(() => {
 .icon-btn:hover {
   background: var(--bg-elevated);
   color: var(--text-primary);
+}
+/* AI 入口：打开态主色高亮 */
+.icon-btn.ai-on {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
 }
 .divider {
   width: 1px;
