@@ -71,6 +71,30 @@ function onThinkingClick({ key }: { key: string | number }) {
   chat.setThinking(String(key));
 }
 
+// ===== 历史会话面板 =====
+const historyOpen = ref(false);
+
+function openSession(id: string) {
+  chat.switchSession(id);
+  historyOpen.value = false;
+}
+
+function removeSession(id: string) {
+  chat.deleteSession(id);
+}
+
+/** 相对时间 */
+function relTime(ts: number): string {
+  if (!ts) return "";
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+  if (diff < 7 * 86_400_000) return `${Math.floor(diff / 86_400_000)} 天前`;
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.isComposing || e.keyCode === 229) return;
   if (e.key !== "Enter") return;
@@ -278,9 +302,38 @@ watch(
             <span class="ai-title">AI 助手</span>
             <span class="ai-provider">{{ providerName }}</span>
           </div>
+          <button class="ai-head-btn" title="历史会话" @click="historyOpen = !historyOpen">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 3v5h5" /><path d="M3.05 13a9 9 0 1 0 2.13-9.36L3 8" /><polyline points="12 7 12 12 15 15" />
+            </svg>
+          </button>
           <button class="ai-head-btn" title="新对话" @click="chat.newChat()"><PlusOutlined /></button>
           <button class="ai-head-btn" title="收起" @click="chat.toggle(false)"><CloseOutlined /></button>
         </header>
+
+        <!-- 历史会话面板 -->
+        <div v-if="historyOpen" class="ai-history-mask" @click="historyOpen = false" />
+        <div v-if="historyOpen" class="ai-history">
+          <div class="ai-history-head">历史会话</div>
+          <div v-if="chat.sessionList.length" class="ai-history-list">
+            <div
+              v-for="s in chat.sessionList"
+              :key="s.id"
+              class="ai-history-item"
+              :class="{ active: s.id === chat.currentId }"
+              @click="openSession(s.id)"
+            >
+              <div class="ai-history-info">
+                <div class="ai-history-title">{{ s.title || "新对话" }}</div>
+                <div class="ai-history-time">{{ relTime(s.updatedAt) }} · {{ s.count }} 条</div>
+              </div>
+              <button class="ai-history-del" title="删除此会话" @click.stop="removeSession(s.id)">
+                <CloseOutlined />
+              </button>
+            </div>
+          </div>
+          <div v-else class="ai-history-empty">暂无历史会话</div>
+        </div>
 
         <!-- 消息流 -->
         <div ref="listEl" class="ai-list">
@@ -533,8 +586,7 @@ watch(
   text-overflow: ellipsis;
 }
 .ai-head-btn {
-  display: grid;
-  place-items: center;
+  display: grid;  place-items: center;
   width: 26px;
   height: 26px;
   font-size: 12px;
@@ -549,6 +601,108 @@ watch(
 .ai-head-btn:hover {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+}
+.ai-head-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ===== 历史会话面板 ===== */
+.ai-history-mask {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+}
+.ai-history {
+  position: absolute;
+  top: 50px;
+  left: 10px;
+  right: 10px;
+  z-index: 8;
+  max-height: 62%;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  box-shadow: var(--shadow-panel-hover, 0 8px 24px rgba(0, 0, 0, 0.14));
+  overflow: hidden;
+}
+.ai-history-head {
+  padding: 9px 12px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  border-bottom: 1px solid var(--border-light);
+  flex-shrink: 0;
+}
+.ai-history-list {
+  overflow-y: auto;
+  padding: 4px;
+}
+.ai-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+.ai-history-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+.ai-history-item.active {
+  background: color-mix(in srgb, var(--color-primary) 9%, transparent);
+}
+.ai-history-info {
+  flex: 1;
+  min-width: 0;
+}
+.ai-history-title {
+  font-size: 12px;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-history-item.active .ai-history-title {
+  color: var(--color-primary);
+  font-weight: 550;
+}
+.ai-history-time {
+  margin-top: 1px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+.ai-history-del {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+.ai-history-item:hover .ai-history-del {
+  opacity: 1;
+}
+.ai-history-del:hover {
+  color: #ef4444;
+  background: color-mix(in srgb, #ef4444 10%, transparent);
+}
+.ai-history-empty {
+  padding: 22px 12px;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
 }
 
 /* ===== 消息流 ===== */
