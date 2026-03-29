@@ -1,0 +1,48 @@
+name: byte_memos_mobile
+description: "byte-memos 移动端：液态玻璃设计的备忘录远程客户端"
+publish_to: 'none'
+
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+
+  # 状态管理
+  flutter_riverpod: ^2.6.1
+
+  # 网络
+  dio: ^5.7.0
+
+  # 安全存储（API Key 进 Keystore）
+  flutter_secure_storage: ^9.2.2
+
+  # 轻量配置
+  shared_preferences: ^2.3.0
+
+  # Markdown 渲染（dsh-mobile 同款）
+  flutter_markdown_plus: ^1.0.12
+  markdown: ^7.3.0
+
+  # 日期格式化（中文按天分组）
+  intl: ^0.20.0
+
+  # 系统分享出去（详情页）
+  share_plus: ^10.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+
+  uses-material-design: true
