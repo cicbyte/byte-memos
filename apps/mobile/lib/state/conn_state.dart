@@ -69,6 +69,15 @@ class ConnNotifier extends StateNotifier<ConnState> {
 
   ConnStore? _store;
 
+  /// 离线自动重连定时器（15s 周期，恢复在线即停）
+  Timer? _retryTimer;
+
+  @override
+  void dispose() {
+    _retryTimer?.cancel();
+    super.dispose();
+  }
+
   /// store 就绪后挂载并自动探测（由 provider 装配处驱动）
   void attach(ConnStore store) {
     if (_store != null) return;
@@ -105,7 +114,21 @@ class ConnNotifier extends StateNotifier<ConnState> {
       client: ok ? client : null,
       lastOkAt: ok ? DateTime.now() : state.lastOkAt,
     );
+    _scheduleRetry(st, p);
     return st;
+  }
+
+  /// offline/keyError 时周期重探（服务重启/网络恢复后自动回连）
+  void _scheduleRetry(ConnStatus st, ConnProfile p) {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    if (st != ConnStatus.offline && st != ConnStatus.keyError) return;
+    _retryTimer = Timer(const Duration(seconds: 15), () {
+      // 状态没被别人改掉才继续重试
+      if (state.activeId == p.id && (state.status == ConnStatus.offline || state.status == ConnStatus.keyError)) {
+        probe(p);
+      }
+    });
   }
 
   /// 保存/更新配置并激活
@@ -141,7 +164,15 @@ class ConnNotifier extends StateNotifier<ConnState> {
   void markOffline() {
     if (state.status == ConnStatus.online) {
       state = state.copyWith(status: ConnStatus.offline, client: null);
+      final p = state.activeProfile;
+      if (p != null) _scheduleRetry(ConnStatus.offline, p);
     }
+  }
+
+  /// 手动重试（离线横幅点按 / 下拉刷新触发）
+  Future<void> retry() async {
+    final p = state.activeProfile;
+    if (p != null) await probe(p);
   }
 }
 

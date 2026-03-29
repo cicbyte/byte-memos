@@ -128,6 +128,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
     final m = _memo;
+    final barTitle = m == null ? '' : (m.title.isEmpty ? _excerpt(m.content) : m.title);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -140,80 +141,111 @@ class _DetailPageState extends ConsumerState<DetailPage> {
           ),
         ),
         child: SafeArea(
+          bottom: false,
           child: m == null
               ? Center(
                   child: _error != null
                       ? Text('加载失败：$_error', style: const TextStyle(fontSize: 13))
                       : const CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // 顶栏
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back_rounded),
-                            onPressed: () => Navigator.pop(context),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: Icon(m.pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 20),
-                            onPressed: _togglePin,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.ios_share_rounded, size: 20),
-                            onPressed: _shareOut,
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.edit_outlined, size: 20),
-                            onPressed: () => showEditSheet(context, ref, memo: m),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete_outline_rounded, size: 20, color: Colors.redAccent),
-                            onPressed: _delete,
-                          ),
-                        ],
+              : CustomScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  slivers: [
+                    // 玻璃吸顶条：内容滚动时从模糊层下方穿过
+                    SliverAppBar(
+                      pinned: true,
+                      elevation: 0,
+                      scrolledUnderElevation: 0,
+                      backgroundColor: Colors.transparent,
+                      foregroundColor: fg,
+                      title: Text(
+                        barTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: fg),
                       ),
-                    ),
-                    // 元信息
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (m.title.isNotEmpty)
-                            Text(
-                              m.title,
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, height: 1.35, color: fg),
+                      leading: IconButton(
+                        icon: const Icon(Icons.arrow_back_rounded),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                      actions: [
+                        IconButton(
+                          tooltip: m.pinned ? '取消置顶' : '置顶',
+                          icon: Icon(m.pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 20),
+                          onPressed: _togglePin,
+                        ),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_horiz_rounded, size: 22),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          position: PopupMenuPosition.under,
+                          onSelected: (v) {
+                            switch (v) {
+                              case 'edit':
+                                showEditSheet(context, ref, memo: m);
+                              case 'share':
+                                _shareOut();
+                              case 'delete':
+                                _delete();
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem(value: 'edit', child: Text('编辑', style: TextStyle(fontSize: 14))),
+                            const PopupMenuItem(value: 'share', child: Text('分享出去', style: TextStyle(fontSize: 14))),
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('删除', style: TextStyle(fontSize: 14, color: Colors.redAccent)),
                             ),
-                          const SizedBox(height: 6),
-                          Row(
-                            children: [
-                              Text(
-                                _fmtTime(m.createdAt),
-                                style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
-                              ),
-                              for (final t in m.tags.take(6)) ...[
-                                const SizedBox(width: 8),
-                                Text('#$t', style: TextStyle(fontSize: 11, color: kAccent.withValues(alpha: 0.9))),
-                              ],
-                            ],
-                          ),
-                        ],
+                          ],
+                        ),
+                      ],
+                      flexibleSpace: GlassContainer(
+                        tier: GlassTier.regular,
+                        preference: ref.watch(glassPrefProvider),
+                        borderRadius: BorderRadius.zero,
+                        padding: EdgeInsets.zero,
+                        child: const SizedBox.expand(),
                       ),
                     ),
+
+                    // 元信息（滚出视口）
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+                      sliver: SliverToBoxAdapter(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (m.title.isNotEmpty)
+                              Text(
+                                m.title,
+                                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, height: 1.35, color: fg),
+                              ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Text(
+                                  _fmtTime(m.createdAt),
+                                  style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor),
+                                ),
+                                for (final t in m.tags.take(6)) ...[
+                                  const SizedBox(width: 8),
+                                  Text('#$t', style: TextStyle(fontSize: 11, color: kAccent.withValues(alpha: 0.9))),
+                                ],
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     // 正文（实体垫底卡片：可读性红线）
-                    Expanded(
-                      child: GlassContainer(
-                        tier: GlassTier.flat,
-                        preference: ref.watch(glassPrefProvider),
-                        borderRadius: BorderRadius.circular(20),
-                        margin: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-                        padding: const EdgeInsets.all(16),
-                        child: SingleChildScrollView(
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 36),
+                      sliver: SliverToBoxAdapter(
+                        child: GlassContainer(
+                          tier: GlassTier.flat,
+                          preference: ref.watch(glassPrefProvider),
+                          borderRadius: BorderRadius.circular(20),
+                          padding: const EdgeInsets.all(16),
                           child: MarkdownBody(
                             data: m.content,
                             selectable: true,

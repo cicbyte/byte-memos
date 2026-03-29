@@ -175,3 +175,45 @@ pub struct ApiStatus {
     url: String,
     api_key: Option<String>,
 }
+
+/// 移动端扫码配对信息：本机局域网 IP + 端口 + API Key
+///
+/// `bmemos://pair?v=1&name=..&host=..&port=..&key=..` 载荷的数据源。
+#[tauri::command]
+pub fn mobile_pairing_info(state: tauri::State<'_, AppState>) -> Result<PairingInfo, String> {
+    let svc = state.svc();
+    let cfg = svc.config().map_err(|e| e.to_string())?;
+    let api_state = state.api.lock().map_err(|e| e.to_string())?;
+    let running = api_state.is_some();
+    let port = api_state.as_ref().map(|s| s.port).unwrap_or(8318);
+    let host = lan_ip().unwrap_or_else(|| "127.0.0.1".into());
+    let name = std::env::var("COMPUTERNAME")
+        .or_else(|_| std::env::var("HOSTNAME"))
+        .unwrap_or_else(|_| "byte-memos".to_string());
+    Ok(PairingInfo {
+        v: 1,
+        name,
+        host,
+        port,
+        key: cfg.api.key,
+        running,
+    })
+}
+
+#[derive(serde::Serialize)]
+pub struct PairingInfo {
+    pub v: u8,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub key: String,
+    pub running: bool,
+}
+
+/// 探测默认路由出口的本机 IP（UDP connect 不发包，无需联网可用）
+fn lan_ip() -> Option<String> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    sock.connect("8.8.8.8:80").ok()?;
+    let addr = sock.local_addr().ok()?;
+    Some(addr.ip().to_string())
+}

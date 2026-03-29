@@ -112,6 +112,7 @@ pub fn run() {
             commands::servers::start_api_server,
             commands::servers::stop_api_server,
             commands::servers::api_server_status,
+            commands::servers::mobile_pairing_info,
             // AI（供应商管理 + 流式动作）
             commands::ai::ai_provider_list,
             commands::ai::ai_provider_add,

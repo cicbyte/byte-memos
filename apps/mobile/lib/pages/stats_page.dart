@@ -39,6 +39,17 @@ class StatsPage extends ConsumerWidget {
       data: (s) => ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 190),
         children: [
+          // 页头
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 12),
+            child: Row(
+              children: [
+                Text('统计', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
+                const SizedBox(width: 10),
+                Text('备忘录总览', style: TextStyle(fontSize: 11.5, color: fg.withValues(alpha: 0.45))),
+              ],
+            ),
+          ),
           // 数字拼贴 2×2
           GridView.count(
             crossAxisCount: 2,

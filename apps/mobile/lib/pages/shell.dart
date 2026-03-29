@@ -195,10 +195,15 @@ class _NavItem extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
         padding: EdgeInsets.symmetric(horizontal: 16, vertical: active ? 6 : 4),
         transform: Matrix4.translationValues(0, active ? -2 : 0, 0), // 选中态「悬浮位移」
+        decoration: BoxDecoration(
+          // 激活胶囊：玻璃内的柔光底
+          color: active ? kPrimary.withValues(alpha: dark ? 0.22 : 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -231,24 +236,27 @@ class _OfflineBanner extends ConsumerWidget {
     final mins = memos.lastSyncAt == null
         ? null
         : DateTime.now().difference(memos.lastSyncAt!).inMinutes;
-    return Material(
-      color: isKey ? Colors.orange.withValues(alpha: 0.9) : Colors.black54,
-      child: Padding(
-        padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 4, bottom: 6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(isKey ? Icons.key_off_rounded : Icons.wifi_off_rounded, size: 13, color: Colors.white70),
-            const SizedBox(width: 6),
-            Text(
-              isKey
-                  ? 'API Key 不正确 · 去「我的」修改'
-                  : memos.fromSnapshot
-                      ? '离线 · 浏览 ${mins == null ? '早前' : '$mins 分钟前'}的快照'
-                      : '连接中断 · 点击重试',
-              style: const TextStyle(fontSize: 12, color: Colors.white70),
-            ),
-          ],
+    return GestureDetector(
+      onTap: () => ref.read(connProvider.notifier).retry(),
+      child: Material(
+        color: isKey ? Colors.orange.withValues(alpha: 0.9) : Colors.black54,
+        child: Padding(
+          padding: EdgeInsets.only(top: MediaQuery.paddingOf(context).top + 4, bottom: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(isKey ? Icons.key_off_rounded : Icons.wifi_off_rounded, size: 13, color: Colors.white70),
+              const SizedBox(width: 6),
+              Text(
+                isKey
+                    ? 'API Key 不正确 · 点按重试'
+                    : memos.fromSnapshot
+                        ? '离线 · 浏览 ${mins == null ? '早前' : '$mins 分钟前'}的快照 · 点按重连'
+                        : '连接中断 · 点击重试',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ],
+          ),
         ),
       ),
     );

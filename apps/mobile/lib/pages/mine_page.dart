@@ -1,13 +1,18 @@
-/// 我的页：连接状态卡 + 多连接管理（增/改/删/切换/测试）+ 外观（玻璃强度/主题）
+/// 我的页：连接状态卡 + 多连接管理（增/改/删/切换/测试）+ 回收站入口 + 外观（玻璃强度/主题）
 library;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../conn/conn_store.dart';
+import '../conn/pairing.dart';
 import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
+import '../state/memos_state.dart';
+import 'pair_scan_page.dart';
+import 'trash_page.dart';
 
 class MinePage extends ConsumerWidget {
   const MinePage({super.key});
@@ -25,6 +30,11 @@ class MinePage extends ConsumerWidget {
       children: [
         Text('我的', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
         const SizedBox(height: 14),
+
+        // ===== 数据 =====
+        _SectionLabel('数据', fg),
+        _TrashEntry(fg: fg),
+        const SizedBox(height: 18),
 
         // ===== 连接 =====
         _SectionLabel('连接', fg),
@@ -209,6 +219,63 @@ class MinePage extends ConsumerWidget {
               Text(existing == null ? '添加连接' : '编辑连接',
                   style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: dark ? Colors.white : Colors.black87)),
               const SizedBox(height: 14),
+
+              // 快捷配对：扫码 / 剪贴板（仅新增时）
+              if (existing == null) ...[
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: dark ? Colors.white : kPrimary,
+                          side: BorderSide(color: dark ? Colors.white24 : kPrimary.withValues(alpha: 0.5)),
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                        ),
+                        onPressed: () async {
+                          final payload = await Navigator.of(ctx).push<PairingPayload>(
+                            MaterialPageRoute(builder: (_) => const PairScanPage()),
+                          );
+                          if (payload != null) {
+                            name.text = payload.name;
+                            url.text = payload.baseUrl;
+                            key.text = payload.apiKey;
+                          }
+                        },
+                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 17),
+                        label: const Text('扫码配对', style: TextStyle(fontSize: 12.5)),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: dark ? Colors.white : kPrimary,
+                          side: BorderSide(color: dark ? Colors.white24 : kPrimary.withValues(alpha: 0.5)),
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                        ),
+                        onPressed: () async {
+                          final data = await Clipboard.getData('text/plain');
+                          if (!ctx.mounted) return;
+                          final payload = data?.text == null ? null : parsePairing(data!.text!);
+                          if (payload == null) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(content: Text('剪贴板没有配对串（在桌面端复制后重试）')),
+                            );
+                            return;
+                          }
+                          name.text = payload.name;
+                          url.text = payload.baseUrl;
+                          key.text = payload.apiKey;
+                        },
+                        icon: const Icon(Icons.content_paste_rounded, size: 17),
+                        label: const Text('从剪贴板配对', style: TextStyle(fontSize: 12.5)),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+              ],
+
               _field(ctx, name, '名称（如：家里台式机）', dark),
               const SizedBox(height: 10),
               _field(ctx, url, 'http://192.168.1.10:8318', dark),
@@ -285,6 +352,59 @@ class _SectionLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.55))),
+    );
+  }
+}
+
+/// 回收站入口：flat 玻璃行 + 数量角标
+class _TrashEntry extends ConsumerWidget {
+  const _TrashEntry({required this.fg});
+
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final trashed = ref.watch(statsProvider).maybeWhen(
+          data: (s) => s.trashedCount,
+          orElse: () => 0,
+        );
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrashPage())),
+        child: GlassContainer(
+          tier: GlassTier.flat,
+          preference: ref.watch(glassPrefProvider),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded, size: 19, color: fg.withValues(alpha: 0.7)),
+              const SizedBox(width: 10),
+              Text('回收站', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg)),
+              const Spacer(),
+              if (trashed > 0)
+                GlassContainer(
+                  tier: GlassTier.regular,
+                  preference: ref.watch(glassPrefProvider),
+                  borderRadius: BorderRadius.circular(999),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
+                  child: Text(
+                    '$trashed',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: dark ? Colors.white : kPrimary,
+                    ),
+                  ),
+                ),
+              const SizedBox(width: 4),
+              Icon(Icons.chevron_right_rounded, size: 18, color: fg.withValues(alpha: 0.35)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

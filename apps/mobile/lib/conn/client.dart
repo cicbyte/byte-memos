@@ -160,4 +160,17 @@ class BmClient {
   Future<void> restoreMemo(String id) async {
     await _guard(() => _dio.post<dynamic>('/trash/memo/$id/restore'));
   }
+
+  Future<List<TrashedItem>> listTrash() async {
+    final data = await _guard(() => _dio.get<dynamic>('/trash'));
+    return (data as List<dynamic>).map((e) => TrashedItem.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> purgeMemo(String id) async {
+    await _guard(() => _dio.delete<dynamic>('/trash/memo/$id'));
+  }
+
+  Future<void> emptyTrash() async {
+    await _guard(() => _dio.post<dynamic>('/trash'));
+  }
 }

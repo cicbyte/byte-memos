@@ -36,6 +36,7 @@ dependencies:
 
   # 系统分享出去（详情页）
   share_plus: ^10.1.4
+  mobile_scanner: ^7.4.2
 
 dev_dependencies:
   flutter_test:

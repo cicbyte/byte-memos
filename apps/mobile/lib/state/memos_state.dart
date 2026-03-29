@@ -166,6 +166,9 @@ final memosProvider = StateNotifierProvider<MemosNotifier, MemosState>((ref) => 
 final searchQueryProvider = StateProvider<String>((_) => '');
 final searchTagProvider = StateProvider<String?>((_) => null);
 
+/// 流页分类筛选（null = 全部）
+final categoryFilterProvider = StateProvider<String?>((_) => null);
+
 final searchResultsProvider = FutureProvider.autoDispose<List<SearchHit>>((ref) async {
   final q = ref.watch(searchQueryProvider).trim();
   final client = ref.watch(connProvider).client;

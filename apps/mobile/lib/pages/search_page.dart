@@ -26,11 +26,25 @@ class SearchPage extends ConsumerWidget {
 
     return Column(
       children: [
+        // 页头
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+          child: Row(
+            children: [
+              Text('搜索', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
+              const SizedBox(width: 10),
+              Text('全文 + 标签 + 分类', style: TextStyle(fontSize: 11.5, color: fg.withValues(alpha: 0.45))),
+            ],
+          ),
+        ),
+
         // 搜索框
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: TextField(
             controller: _controller,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
             onChanged: (v) => ref.read(searchQueryProvider.notifier).state = v,
             style: TextStyle(color: fg, fontSize: 14),
             decoration: InputDecoration(

@@ -114,6 +114,33 @@ class TagStat {
       );
 }
 
+/// 回收站条目（软删除备忘，与桌面端 TrashedItem 对齐）
+class TrashedItem {
+  const TrashedItem({
+    required this.shortId,
+    required this.title,
+    required this.description,
+    this.category,
+    required this.deletedAt,
+  });
+
+  final String shortId;
+  final String title;
+  final String description;
+  final String? category;
+
+  /// 删除时间（ISO8601）
+  final String deletedAt;
+
+  factory TrashedItem.fromJson(Map<String, dynamic> j) => TrashedItem(
+        shortId: j['short_id'] as String? ?? '',
+        title: j['title'] as String? ?? '',
+        description: j['description'] as String? ?? '',
+        category: j['category'] as String?,
+        deletedAt: j['deleted_at'] as String? ?? '',
+      );
+}
+
 class SearchHit {
   const SearchHit({
     required this.shortId,

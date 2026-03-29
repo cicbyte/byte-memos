@@ -15,6 +15,7 @@ import { ref, onMounted } from "vue";
 import { useLayoutStore } from "@/stores/layout";
 import ServerPanel from "./components/ServerPanel.vue";
 import ApiDocsPane from "./components/ApiDocsPane.vue";
+import PairingCard from "./components/PairingCard.vue";
 import { hostOptions } from "./lib/constants";
 import { useApiServer } from "./lib/useApiServer";
 
@@ -76,6 +77,9 @@ onMounted(() => {
         @save-key="saveApiKey"
         @copy="copyText"
       />
+
+      <!-- 移动端扫码配对（D1）：runningKey 变化时刷新二维码 -->
+      <PairingCard :running-key="Number(apiRunning)" @copy="copyText" />
     </div>
 
     <!-- API 文档 -->
