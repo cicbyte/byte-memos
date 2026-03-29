@@ -30,6 +30,29 @@ export const useAiProviderStore = defineStore("aiProvider", () => {
     return providers.value.find((p) => p.is_enabled);
   }
 
+  /** 切换供应商的默认模型（显式用户动作；api_key 传空 = 保留原值） */
+  async function selectModel(id: number, model: string): Promise<boolean> {
+    const p = providers.value.find((x) => x.id === id);
+    if (!p) return false;
+    try {
+      await api.update({
+        id,
+        name: p.name,
+        base_url: p.base_url,
+        api_key: "",
+        model,
+        max_tokens: p.max_tokens,
+        temperature: p.temperature,
+        is_enabled: p.is_enabled,
+      });
+      p.model = model;
+      return true;
+    } catch {
+      message.error("模型切换失败");
+      return false;
+    }
+  }
+
   /** AI 调用前守卫：返回是否就绪（未配置则提示并跳设置页） */
   async function ensureReady(): Promise<boolean> {
     const list = await load();
@@ -39,5 +62,5 @@ export const useAiProviderStore = defineStore("aiProvider", () => {
     return false;
   }
 
-  return { providers, loaded, load, enabledProvider, ensureReady };
+  return { providers, loaded, load, enabledProvider, selectModel, ensureReady };
 });

@@ -88,7 +88,9 @@ async fn run_agent(
     use rig_core::completion::message::{ToolCall, ToolResult, ToolResultContent, UserContent};
 
     if cfg.model.trim().is_empty() {
-        return Err(anyhow!("未配置模型名"));
+        return Err(anyhow!(
+            "未配置默认模型：请到 设置 → AI 供应商 选择一个模型（或先点击「获取模型」）"
+        ));
     }
 
     // 会话历史（跨工具轮累积：assistant toolcall 轮 + 工具结果）

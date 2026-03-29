@@ -81,6 +81,12 @@ export const useAiChatStore = defineStore("aiChat", () => {
     const t = text.trim();
     if (!t || running.value) return;
     if (!(await aiStore.ensureReady())) return;
+    // 默认模型必须由用户显式选择（内置供应商不再预置）
+    const p = aiStore.enabledProvider();
+    if (!p?.model) {
+      message.warning("当前供应商还未选择模型：点击顶部模型名即可选择");
+      return;
+    }
 
     const history: ChatTurn[] = [...messages.value, { role: "user", content: t }];
     const placeholder: ChatTurn = { role: "assistant", content: "" };
