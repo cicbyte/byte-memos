@@ -141,7 +141,7 @@ class SearchPage extends ConsumerWidget {
           ListTile(
             dense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-            leading: Icon(Icons.folder_outlined, size: 19, color: kIndigo.withValues(alpha: 0.8)),
+            leading: Icon(Icons.folder_outlined, size: 19, color: kPrimary.withValues(alpha: 0.8)),
             title: Text(c.name, style: TextStyle(fontSize: 13.5, color: fg)),
             trailing: Text('${c.memoCount} 条', style: TextStyle(fontSize: 11, color: Theme.of(context).hintColor)),
             onTap: () {
@@ -169,7 +169,7 @@ class _Chip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4.5),
         decoration: BoxDecoration(
-          color: active ? kIndigo : Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.62),
+          color: active ? kPrimary : Theme.of(context).brightness == Brightness.dark ? Colors.white.withValues(alpha: 0.08) : Colors.white.withValues(alpha: 0.62),
           borderRadius: BorderRadius.circular(999),
         ),
         child: Text(
@@ -236,7 +236,7 @@ class _HitCard extends StatelessWidget {
               const SizedBox(height: 7),
               Wrap(
                 spacing: 8,
-                children: [for (final t in matched.take(5)) Text('#$t', style: TextStyle(fontSize: 10.5, color: kViolet.withValues(alpha: 0.9)))],
+                children: [for (final t in matched.take(5)) Text('#$t', style: TextStyle(fontSize: 10.5, color: kAccent.withValues(alpha: 0.9)))],
               ),
             ],
           ],

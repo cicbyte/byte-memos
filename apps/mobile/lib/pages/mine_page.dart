@@ -73,7 +73,7 @@ class MinePage extends ConsumerWidget {
                   leading: Icon(
                     p.id == conn.activeId ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
                     size: 17,
-                    color: p.id == conn.activeId ? kIndigo : (dark ? Colors.white30 : Colors.black26),
+                    color: p.id == conn.activeId ? kPrimary : (dark ? Colors.white30 : Colors.black26),
                   ),
                   title: Text(
                     '${p.name} · ${_shortUrl(p.baseUrl)}',
@@ -143,7 +143,7 @@ class MinePage extends ConsumerWidget {
                 style: ButtonStyle(
                   visualDensity: VisualDensity.compact,
                   backgroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected) ? kIndigo.withValues(alpha: 0.85) : null),
+                      states.contains(WidgetState.selected) ? kPrimary.withValues(alpha: 0.85) : null),
                   foregroundColor: WidgetStateProperty.resolveWith((states) =>
                       states.contains(WidgetState.selected) ? Colors.white : fg.withValues(alpha: 0.6)),
                 ),
@@ -163,7 +163,7 @@ class MinePage extends ConsumerWidget {
                 style: ButtonStyle(
                   visualDensity: VisualDensity.compact,
                   backgroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected) ? kIndigo.withValues(alpha: 0.85) : null),
+                      states.contains(WidgetState.selected) ? kPrimary.withValues(alpha: 0.85) : null),
                   foregroundColor: WidgetStateProperty.resolveWith((states) =>
                       states.contains(WidgetState.selected) ? Colors.white : fg.withValues(alpha: 0.6)),
                 ),
@@ -222,7 +222,7 @@ class MinePage extends ConsumerWidget {
                   const SizedBox(width: 8),
                   FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: kIndigo,
+                      backgroundColor: kPrimary,
                       foregroundColor: Colors.white,
                     ),
                     onPressed: () {

@@ -164,7 +164,7 @@ class _GlassFabState extends State<_GlassFab> with SingleTickerProviderStateMixi
             child: Icon(
               Icons.add_rounded,
               size: 28,
-              color: dark ? Colors.white : kIndigo,
+              color: dark ? Colors.white : kPrimary,
             ),
           ),
         ),
@@ -189,7 +189,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final activeColor = dark ? Colors.white : kIndigo;
+    final activeColor = dark ? Colors.white : kPrimary;
     final inactiveColor = dark ? Colors.white38 : Colors.black38;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,

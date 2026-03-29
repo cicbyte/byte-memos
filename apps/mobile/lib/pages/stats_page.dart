@@ -48,8 +48,8 @@ class StatsPage extends ConsumerWidget {
             crossAxisSpacing: 10,
             childAspectRatio: 1.55,
             children: [
-              _StatCard(icon: Icons.note_rounded, color: kIndigo, label: '备忘录', value: '${s.memoCount}', fg: fg),
-              _StatCard(icon: Icons.tag_rounded, color: kViolet, label: '标签', value: '${s.tagCount}', fg: fg),
+              _StatCard(icon: Icons.note_rounded, color: kPrimary, label: '备忘录', value: '${s.memoCount}', fg: fg),
+              _StatCard(icon: Icons.tag_rounded, color: kAccent, label: '标签', value: '${s.tagCount}', fg: fg),
               _StatCard(icon: Icons.push_pin_rounded, color: const Color(0xFFF59E0B), label: '置顶', value: '${s.pinnedCount}', fg: fg),
               _StatCard(icon: Icons.delete_rounded, color: const Color(0xFFFF4444), label: '回收站', value: '${s.trashedCount}', fg: fg),
             ],
@@ -75,7 +75,7 @@ class StatsPage extends ConsumerWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
                       decoration: BoxDecoration(
-                        color: kViolet.withValues(alpha: 0.10 + (t.count / 30).clamp(0, 0.18)),
+                        color: kAccent.withValues(alpha: 0.10 + (t.count / 30).clamp(0, 0.18)),
                         borderRadius: BorderRadius.circular(999),
                       ),
                       child: Text(

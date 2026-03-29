@@ -168,7 +168,7 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: _preview ? (dark ? Colors.white : kIndigo).withValues(alpha: 0.15) : Colors.transparent,
+                        color: _preview ? (dark ? Colors.white : kPrimary).withValues(alpha: 0.15) : Colors.transparent,
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
@@ -187,7 +187,7 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                       decoration: BoxDecoration(
-                        gradient: const LinearGradient(colors: [kIndigo, kViolet]),
+                        gradient: const LinearGradient(colors: [kPrimary, kAccent]),
                         borderRadius: BorderRadius.circular(9),
                       ),
                       child: _saving

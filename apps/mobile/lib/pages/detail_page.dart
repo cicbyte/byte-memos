@@ -198,7 +198,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                               ),
                               for (final t in m.tags.take(6)) ...[
                                 const SizedBox(width: 8),
-                                Text('#$t', style: TextStyle(fontSize: 11, color: kViolet.withValues(alpha: 0.9))),
+                                Text('#$t', style: TextStyle(fontSize: 11, color: kAccent.withValues(alpha: 0.9))),
                               ],
                             ],
                           ),
@@ -240,7 +240,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
       code: TextStyle(fontSize: 12.5, color: fg.withValues(alpha: 0.9), backgroundColor: Theme.of(context).brightness == Brightness.dark ? Colors.white10 : Colors.black.withValues(alpha: 0.05)),
       blockquote: TextStyle(fontSize: 14, color: fg.withValues(alpha: 0.75)),
       blockquoteDecoration: BoxDecoration(
-        border: Border(left: BorderSide(width: 3, color: kIndigo.withValues(alpha: 0.5))),
+        border: Border(left: BorderSide(width: 3, color: kPrimary.withValues(alpha: 0.5))),
       ),
     );
   }

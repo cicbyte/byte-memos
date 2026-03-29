@@ -52,12 +52,12 @@ class MemoCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                     decoration: BoxDecoration(
-                      color: kIndigo.withValues(alpha: 0.12),
+                      color: kPrimary.withValues(alpha: 0.12),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       memo.category!,
-                      style: const TextStyle(fontSize: 10, color: kIndigo),
+                      style: const TextStyle(fontSize: 10, color: kPrimary),
                     ),
                   ),
                 ],
@@ -88,7 +88,7 @@ class MemoCard extends StatelessWidget {
                         for (final t in memo.tags.take(4))
                           Text(
                             '#$t',
-                            style: TextStyle(fontSize: 10.5, color: kViolet.withValues(alpha: 0.9)),
+                            style: TextStyle(fontSize: 10.5, color: kAccent.withValues(alpha: 0.9)),
                           ),
                       ],
                     ),
