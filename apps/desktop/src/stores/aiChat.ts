@@ -33,7 +33,14 @@ export interface ChatTurn {
 }
 
 const STORAGE_KEY = "bm-ai-chat";
+const THINKING_KEY = "bm-ai-thinking";
 const MAX_MESSAGES = 100;
+
+/** 思考等级（off=关 / medium=适中默认 / high=深入），localStorage 持久化 */
+function loadThinking(): string {
+  const v = localStorage.getItem(THINKING_KEY);
+  return v === "off" || v === "high" ? v : "medium";
+}
 
 function loadTurns(): ChatTurn[] {
   try {
@@ -89,7 +96,18 @@ export const useAiChatStore = defineStore("aiChat", () => {
   const open = ref(false);
   const messages = ref<ChatTurn[]>(loadTurns());
   const running = ref(false);
+  const thinking = ref(loadThinking());
   let handle: StreamHandle | null = null;
+
+  /** 设置思考等级（off/medium/high）并持久化 */
+  function setThinking(v: string) {
+    thinking.value = v;
+    try {
+      localStorage.setItem(THINKING_KEY, v);
+    } catch {
+      /* 忽略 */
+    }
+  }
 
   function persist() {
     try {
@@ -147,7 +165,7 @@ export const useAiChatStore = defineStore("aiChat", () => {
       }
     };
 
-    handle = streamChat(history, (chunk: AiStreamChunk) => {
+    handle = streamChat(history, thinking.value, (chunk: AiStreamChunk) => {
       if (chunk.type === "token") {
         write((a) => {
           a.content += chunk.content;
@@ -204,5 +222,5 @@ export const useAiChatStore = defineStore("aiChat", () => {
       });
   }
 
-  return { open, messages, running, toggle, send, stop, newChat };
+  return { open, messages, running, thinking, toggle, send, stop, newChat, setThinking };
 });

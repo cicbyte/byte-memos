@@ -52,7 +52,7 @@ pub async fn run_stream(
 ) -> Result<String> {
     let mut wrapped = |t: &str, th: &str, _: Option<&ToolDeltaEvent<'_>>| on_delta(t, th);
     let mut noop = |_: &ToolExec| String::new();
-    run_agent(cfg, system, &[], user, Vec::new(), &mut noop, &mut wrapped, cancel).await
+    run_agent(cfg, system, &[], user, Vec::new(), "", &mut noop, &mut wrapped, cancel).await
 }
 
 /// 多轮流式对话：history 为 (是否用户, 内容) 顺序序列（不含本次 user 输入）
@@ -66,22 +66,24 @@ pub async fn run_chat_stream(
 ) -> Result<String> {
     let mut wrapped = |t: &str, th: &str, _: Option<&ToolDeltaEvent<'_>>| on_delta(t, th);
     let mut noop = |_: &ToolExec| String::new();
-    run_agent(cfg, system, history, user, Vec::new(), &mut noop, &mut wrapped, cancel).await
+    run_agent(cfg, system, history, user, Vec::new(), "", &mut noop, &mut wrapped, cancel).await
 }
 
 /// 带内置工具的 agent 流（侧边栏对话）：模型可多轮发起工具调用，
 /// `execute` 同步执行并返回结果 JSON 文本；文本增量实时回调。
+/// thinking：思考等级（off/medium/high；off/high 对 ollama 走 think 参数）
 pub async fn run_agent_stream(
     cfg: &ProviderConfig,
     system: &str,
     history: &[(bool, String)],
     user: &str,
     tools: Vec<ToolDefinition>,
+    thinking: &str,
     execute: impl FnMut(&ToolExec) -> String,
     on_delta: &mut AgentDelta<'_>,
     cancel: &CancellationToken,
 ) -> Result<String> {
-    run_agent(cfg, system, history, user, tools, execute, on_delta, cancel).await
+    run_agent(cfg, system, history, user, tools, thinking, execute, on_delta, cancel).await
 }
 
 async fn run_agent(
@@ -90,6 +92,7 @@ async fn run_agent(
     history: &[(bool, String)],
     user: &str,
     tools: Vec<ToolDefinition>,
+    thinking: &str,
     mut execute: impl FnMut(&ToolExec) -> String,
     on_delta: &mut AgentDelta<'_>,
     cancel: &CancellationToken,
@@ -135,6 +138,19 @@ async fn run_agent(
                 }
                 if cfg.max_tokens > 0 {
                     req = req.max_tokens(cfg.max_tokens as u64);
+                }
+                // 思考等级（仅 ollama 协议支持 think 参数：off=false / high=high；
+                // medium 不传用模型默认；其他供应商由调用方走系统提示词）
+                if cfg.provider_key_normalized() == "ollama" {
+                    match thinking {
+                        "off" => {
+                            req = req.additional_params(serde_json::json!({ "think": false }));
+                        }
+                        "high" => {
+                            req = req.additional_params(serde_json::json!({ "think": "high" }));
+                        }
+                        _ => {}
+                    }
                 }
                 let mut stream = req.stream().await.context("AI 流式请求失败")?;
 
@@ -371,6 +387,7 @@ mod tests {
             &[],
             "现在几点了？请用工具查询后回答。",
             tools,
+            "",
             execute,
             &mut cb,
             &cancel,
@@ -401,7 +418,7 @@ mod tests {
             std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         // 不落库：模拟执行成功，隔离 UI 问题
         let mut tool_calls = 0usize;
-        let execute = move |exec: &ToolExec| {
+        let execute = move |_exec: &ToolExec| {
             tool_calls += 1;
             format!("{{\"ok\":true,\"short_id\":\"test{}\",\"title\":\"诗\"}}", tool_calls)
         };
@@ -427,7 +444,7 @@ mod tests {
                       你有内置工具可以查询与操作用户的备忘录（搜索、列出、读取、创建、更新、删除、分类/标签/统计），\
                       涉及用户数据的问题优先调用工具获取真实数据，不要编造；用户明确要求记录/保存时用 create_memo。";
         let cancel = CancellationToken::new();
-        let full = run_agent_stream(&cfg, system, &[], "添加一首随机李白的诗", tools, execute, &mut cb, &cancel)
+        let full = run_agent_stream(&cfg, system, &[], "添加一首随机李白的诗", tools, "off", execute, &mut cb, &cancel)
             .await
             .expect("全链路失败");
         let e = events.lock().unwrap();

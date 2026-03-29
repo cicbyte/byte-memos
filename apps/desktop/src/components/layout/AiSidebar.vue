@@ -36,14 +36,14 @@ function send() {
   if (!t || chat.running) return;
   const p = aiStore.enabledProvider();
   if (!p?.model) {
-    message.warning("当前供应商还未选择模型：点击顶部模型名即可选择");
+    message.warning("当前供应商还未选择模型：点击底部模型名即可选择");
     return;
   }
   input.value = "";
   void chat.send(t);
 }
 
-// ===== 模型选择（顶部下拉：用户手动获取/选择） =====
+// ===== 模型选择（底部工具条下拉：用户手动获取/选择） =====
 const provider = computed(() => aiStore.enabledProvider());
 const providerName = computed(() => provider.value?.name ?? "未启用供应商");
 const currentModel = computed(() => provider.value?.model ?? "");
@@ -64,12 +64,31 @@ async function onModelMenuClick({ key }: { key: string | number }) {
   if (ok) message.success(`已切换模型：${key}`);
 }
 
+// ===== 思考等级（底部工具条下拉） =====
+const THINKING_LABELS: Record<string, string> = { off: "关闭", medium: "适中", high: "深入" };
+const thinkingLabel = computed(() => THINKING_LABELS[chat.thinking] ?? "适中");
+function onThinkingClick({ key }: { key: string | number }) {
+  chat.setThinking(String(key));
+}
+
 function onKey(e: KeyboardEvent) {
   if (e.isComposing || e.keyCode === 229) return;
-  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+  if (e.key !== "Enter") return;
+  // Alt+Enter = 换行；Enter = 发送；其余组合键保持默认
+  if (e.altKey) {
     e.preventDefault();
-    send();
+    const ta = e.target as HTMLTextAreaElement;
+    ta.setRangeText("\n", ta.selectionStart, ta.selectionEnd, "end");
+    input.value = ta.value;
+    nextTick(() => {
+      ta.style.height = "auto";
+      ta.style.height = Math.min(ta.scrollHeight, 120) + "px";
+    });
+    return;
   }
+  if (e.ctrlKey || e.metaKey || e.shiftKey) return;
+  e.preventDefault();
+  send();
 }
 
 function scrollBottom() {
@@ -255,19 +274,10 @@ watch(
               <path d="M20 3v4" /><path d="M22 5h-4" /><path d="M4 17v2" /><path d="M5 18H3" />
             </svg>
           </span>
-          <a-dropdown trigger="['click']">
-            <div class="ai-head-main" title="点击切换模型">
-              <span class="ai-title">AI 助手</span>
-              <span class="ai-provider" :class="{ 'ai-provider-none': !currentModel }">
-                {{ providerName }} · {{ currentModel || "未选择模型" }} <DownOutlined class="ai-caret" />
-              </span>
-            </div>
-            <template #overlay>
-              <a-menu :selected-keys="currentModel ? [currentModel] : []" @click="onModelMenuClick">
-                <a-menu-item v-for="m in modelMenuItems" :key="m.key">{{ m.label }}</a-menu-item>
-              </a-menu>
-            </template>
-          </a-dropdown>
+          <div class="ai-head-main">
+            <span class="ai-title">AI 助手</span>
+            <span class="ai-provider">{{ providerName }}</span>
+          </div>
           <button class="ai-head-btn" title="新对话" @click="chat.newChat()"><PlusOutlined /></button>
           <button class="ai-head-btn" title="收起" @click="chat.toggle(false)"><CloseOutlined /></button>
         </header>
@@ -369,21 +379,56 @@ watch(
           </div>
         </div>
 
-        <!-- 输入区 -->
+        <!-- 输入区：一体化 composer（chips 内嵌输入框底部） -->
         <footer class="ai-input">
-          <textarea
-            v-model="input"
-            rows="1"
-            placeholder="问点什么…（Ctrl+Enter 发送）"
-            @keydown="onKey"
-            @input="($event.target as HTMLTextAreaElement).style.height = 'auto'; ($event.target as HTMLTextAreaElement).style.height = Math.min(($event.target as HTMLTextAreaElement).scrollHeight, 120) + 'px'"
-          />
-          <button v-if="chat.running" class="ai-send stop" title="停止" @click="chat.stop()">
-            <StopOutlined />
-          </button>
-          <button v-else class="ai-send" :disabled="!input.trim()" title="发送" @click="send">
-            <LoadingOutlined v-if="chat.running" /><SendOutlined v-else />
-          </button>
+          <div class="ai-composer">
+            <textarea
+              v-model="input"
+              rows="1"
+              placeholder="问点什么…（Enter 发送 · Alt+Enter 换行）"
+              @keydown="onKey"
+              @input="($event.target as HTMLTextAreaElement).style.height = 'auto'; ($event.target as HTMLTextAreaElement).style.height = Math.min(($event.target as HTMLTextAreaElement).scrollHeight, 120) + 'px'"
+            />
+            <div class="ai-bar">
+              <a-dropdown trigger="['click']">
+                <button class="bar-chip" :class="{ none: !currentModel }" title="点击切换模型">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="16" rx="2" /><rect x="9" y="9" width="6" height="6" /><line x1="9" y1="1" x2="9" y2="4" /><line x1="15" y1="1" x2="15" y2="4" /><line x1="9" y1="20" x2="9" y2="23" /><line x1="15" y1="20" x2="15" y2="23" /><line x1="20" y1="9" x2="23" y2="9" /><line x1="20" y1="14" x2="23" y2="14" /><line x1="1" y1="9" x2="4" y2="9" /><line x1="1" y1="14" x2="4" y2="14" />
+                  </svg>
+                  <span class="bar-chip-text">{{ currentModel || "选择模型" }}</span>
+                  <DownOutlined class="bar-caret" />
+                </button>
+                <template #overlay>
+                  <a-menu :selected-keys="currentModel ? [currentModel] : []" @click="onModelMenuClick">
+                    <a-menu-item v-for="m in modelMenuItems" :key="m.key">{{ m.label }}</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <a-dropdown trigger="['click']">
+                <button class="bar-chip" title="思考等级：关闭最快 / 适中默认 / 深入更严谨">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z" /><line x1="10" y1="22" x2="14" y2="22" />
+                  </svg>
+                  <span class="bar-chip-text">思考·{{ thinkingLabel }}</span>
+                  <DownOutlined class="bar-caret" />
+                </button>
+                <template #overlay>
+                  <a-menu :selected-keys="[chat.thinking]" @click="onThinkingClick">
+                    <a-menu-item key="off">关闭（最快）</a-menu-item>
+                    <a-menu-item key="medium">适中（默认）</a-menu-item>
+                    <a-menu-item key="high">深入（更严谨）</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+              <span class="bar-spacer" />
+              <button v-if="chat.running" class="ai-send stop" title="停止" @click="chat.stop()">
+                <StopOutlined />
+              </button>
+              <button v-else class="ai-send" :disabled="!input.trim()" title="发送" @click="send">
+                <LoadingOutlined v-if="chat.running" /><SendOutlined v-else />
+              </button>
+            </div>
+          </div>
         </footer>
       </aside>
     </Transition>
@@ -474,14 +519,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 1px;
-  cursor: pointer;
-  border-radius: 8px;
-  padding: 3px 6px;
-  margin: -3px -6px;
-  transition: background var(--transition-fast);
-}
-.ai-head-main:hover {
-  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
 }
 .ai-title {
   font-size: 13px;
@@ -494,13 +531,6 @@ watch(
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-.ai-provider-none {
-  color: #d97706;
-}
-.ai-caret {
-  font-size: 8px;
-  margin-left: 2px;
 }
 .ai-head-btn {
   display: grid;
@@ -837,44 +867,101 @@ watch(
   border-color: color-mix(in srgb, var(--color-primary) 40%, transparent);
 }
 
-/* ===== 输入区 ===== */
+/* ===== 输入区：一体化 composer（chips 内嵌框内） ===== */
 .ai-input {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
   padding: 10px 12px;
   border-top: 1px solid var(--border-light);
   flex-shrink: 0;
 }
-.ai-input textarea {
-  flex: 1;
-  min-height: 36px;
+.ai-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 8px 6px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  transition: border-color var(--transition-fast);
+}
+.ai-composer:focus-within {
+  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+}
+.ai-composer textarea {
+  width: 100%;
+  min-height: 30px;
   max-height: 120px;
-  padding: 8px 11px;
+  padding: 2px 5px;
   font-size: 12.5px;
   font-family: inherit;
   line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
-  border-radius: 10px;
+  background: transparent;
+  border: none;
   outline: none;
   resize: none;
-  transition: border-color var(--transition-fast);
 }
-.ai-input textarea:focus {
-  border-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+.ai-composer textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* composer 内工具行：模型 / 思考等级 ghost chips + 发送 */
+.ai-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.bar-spacer {
+  flex: 1;
+}
+.bar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 55%;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.bar-chip:hover {
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+.bar-chip.none .bar-chip-text {
+  color: #d97706;
+}
+.bar-chip svg {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+}
+.bar-chip-text {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bar-caret {
+  font-size: 7px;
+  flex-shrink: 0;
+  opacity: 0.6;
 }
 .ai-send {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  font-size: 13px;
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
   color: var(--hero-cta-text, #fff);
   background: linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 82%, #000));
   border: none;
-  border-radius: 10px;
+  border-radius: 50%;
   cursor: pointer;
   transition: all var(--transition-fast);
   flex-shrink: 0;

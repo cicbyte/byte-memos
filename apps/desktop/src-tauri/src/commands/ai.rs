@@ -215,6 +215,7 @@ pub struct ChatMsg {
 pub async fn ai_chat_stream(
     state: State<'_, AppState>,
     messages: Vec<ChatMsg>,
+    thinking: String,
     request_id: String,
     on_chunk: Channel<StreamChunk>,
 ) -> Result<String, String> {
@@ -248,7 +249,14 @@ pub async fn ai_chat_stream(
                   3. 仅当用户这条消息明确要求记录/保存/添加时才调用 create_memo，纯提问绝不创建、绝不修改；\
                   4. 你的回答必须针对用户当前这条消息，不要重复或延续上一轮已完成的动作；\
                   5. 工具调用要节制：一次调用能拿到的数据不要重复调用，拿到所需数据后立即作答；\
-                     闲聊、常识、翻译、写作等与用户数据无关的问题直接回答，不调用任何工具。";
+                     闲聊、常识、翻译、写作等与用户数据无关的问题直接回答，不调用任何工具。"
+        .to_string()
+        // 思考等级（off/high 走提示词；ollama 另有 think 参数在流引擎注入）
+        + match thinking.as_str() {
+            "off" => "\n\n输出要求：不要输出思考过程，直接给出最终答案。",
+            "high" => "\n\n请先完整深入地思考，再给出严谨的答案。",
+            _ => "",
+        };
 
     let token = register_cancel(&state, &request_id);
     let chan = on_chunk.clone();
@@ -260,10 +268,11 @@ pub async fn ai_chat_stream(
     };
     let result = byte_memos_core::ai::stream::run_agent_stream(
         &cfg,
-        system,
+        &system,
         &history,
         &user,
         byte_memos_core::ai::tools::definitions(),
+        &thinking,
         execute,
         &mut |token_delta: &str, thinking: &str, tool: Option<&byte_memos_core::ai::stream::ToolDeltaEvent<'_>>| {
             match tool {

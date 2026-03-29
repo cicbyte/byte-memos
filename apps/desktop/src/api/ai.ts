@@ -139,9 +139,11 @@ export interface ChatTurn {
   content: string;
 }
 
-/** 多轮流式对话：messages 为完整会话（最后一条须为用户消息），返回聚合全文 */
+/** 多轮流式对话：messages 为完整会话（最后一条须为用户消息），thinking 为思考等级
+ *  （off/medium/high），返回聚合全文 */
 export function streamChat(
   messages: ChatTurn[],
+  thinking: string,
   onChunk: (chunk: AiStreamChunk) => void,
 ): StreamHandle {
   const requestId = crypto.randomUUID();
@@ -151,7 +153,7 @@ export function streamChat(
   let localReject: ((reason: unknown) => void) | null = null;
   const done = new Promise<string>((resolve, reject) => {
     localReject = reject;
-    invoke<string>("ai_chat_stream", { messages, requestId, onChunk: channel })
+    invoke<string>("ai_chat_stream", { messages, thinking, requestId, onChunk: channel })
       .then(resolve)
       .catch((e) => reject(e instanceof Error ? e : new Error(String(e))));
   });
