@@ -62,6 +62,7 @@ export type AiStreamChunk =
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool"; name: string; args: string }
+  | { type: "tool_result"; name: string; result: string }
   | { type: "done"; full: string }
   | { type: "error"; message: string };
 

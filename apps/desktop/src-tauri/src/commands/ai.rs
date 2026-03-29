@@ -240,11 +240,15 @@ pub async fn ai_chat_stream(
         drop(svc);
         (cfg, turns, user)
     };
-    let system = "你是 byte-memos 备忘录应用内置的 AI 助手。用简体中文简洁回答，\
-                  可使用 Markdown 排版。你有内置工具可以查询与操作用户的备忘录\
-                  （搜索、列出、读取、创建、更新、删除、分类/标签/统计），\
-                  涉及用户数据的问题优先调用工具获取真实数据，不要编造；\
-                  用户明确要求记录/保存时用 create_memo。";
+    let system = "你是 byte-memos 备忘录应用内置的 AI 助手。用简体中文简洁回答，可使用 Markdown 排版。\
+                  你有内置工具可以查询与操作用户的备忘录（搜索、列出、读取、创建、更新、删除、分类/标签/统计）。\
+                  调用规则：\
+                  1. 涉及用户数据的问题必须先调用工具获取真实数据，不要编造或凭记忆回答；\
+                  2. 问数量/统计 → daily_stats；问列表/最近有哪些 → list_memos；找特定内容 → search_memos；\
+                  3. 仅当用户这条消息明确要求记录/保存/添加时才调用 create_memo，纯提问绝不创建、绝不修改；\
+                  4. 你的回答必须针对用户当前这条消息，不要重复或延续上一轮已完成的动作；\
+                  5. 工具调用要节制：一次调用能拿到的数据不要重复调用，拿到所需数据后立即作答；\
+                     闲聊、常识、翻译、写作等与用户数据无关的问题直接回答，不调用任何工具。";
 
     let token = register_cancel(&state, &request_id);
     let chan = on_chunk.clone();
@@ -261,16 +265,25 @@ pub async fn ai_chat_stream(
         &user,
         byte_memos_core::ai::tools::definitions(),
         execute,
-        &mut |token_delta: &str, thinking: &str, tool: Option<&byte_memos_core::ai::stream::ToolExec>| {
-            if let Some(t) = tool {
-                let _ = chan.send(StreamChunk::Tool { name: t.name.clone(), args: t.args_json.clone() });
-                return;
-            }
-            if !thinking.is_empty() {
-                let _ = chan.send(StreamChunk::Thinking { content: thinking.to_string() });
-            }
-            if !token_delta.is_empty() {
-                let _ = chan.send(StreamChunk::Token { content: token_delta.to_string() });
+        &mut |token_delta: &str, thinking: &str, tool: Option<&byte_memos_core::ai::stream::ToolDeltaEvent<'_>>| {
+            match tool {
+                Some(byte_memos_core::ai::stream::ToolDeltaEvent::Start(t)) => {
+                    let _ = chan.send(StreamChunk::Tool { name: t.name.clone(), args: t.args_json.clone() });
+                }
+                Some(byte_memos_core::ai::stream::ToolDeltaEvent::End { name, result }) => {
+                    let _ = chan.send(StreamChunk::ToolResult {
+                        name: name.to_string(),
+                        result: result.to_string(),
+                    });
+                }
+                None => {
+                    if !thinking.is_empty() {
+                        let _ = chan.send(StreamChunk::Thinking { content: thinking.to_string() });
+                    }
+                    if !token_delta.is_empty() {
+                        let _ = chan.send(StreamChunk::Token { content: token_delta.to_string() });
+                    }
+                }
             }
         },
         &token,

@@ -8,14 +8,15 @@
  * - 会话持久化在 aiChat store（localStorage）
  */
 import { nextTick, ref, computed, watch } from "vue";
-import { CloseOutlined, PlusOutlined, SendOutlined, StopOutlined, LoadingOutlined, DownOutlined, CopyOutlined } from "@ant-design/icons-vue";
+import { CloseOutlined, PlusOutlined, SendOutlined, StopOutlined, LoadingOutlined, DownOutlined, CopyOutlined, RightOutlined } from "@ant-design/icons-vue";
 import { message } from "ant-design-vue";
-import { MdPreview } from "md-editor-v3";
+import MdStreamPreview from "@/components/common/MdStreamPreview.vue";
+import { describeStep } from "./aiToolSteps";
 import { useAiChatStore } from "@/stores/aiChat";
 import { useAiProviderStore } from "@/stores/aiProvider";
 import { useThemeStore } from "@/stores/theme";
 import router from "@/router";
-import type { ChatTurn } from "@/stores/aiChat";
+import type { ChatTurn, ToolStep } from "@/stores/aiChat";
 
 const chat = useAiChatStore();
 const aiStore = useAiProviderStore();
@@ -81,24 +82,148 @@ function isStreaming(i: number): boolean {
   return chat.running && i === chat.messages.length - 1;
 }
 
-/** 渲染文本：流式时在末尾内联光标 */
+/** 渲染文本：流式时在末尾内联光标；空回复兜底（思考型模型可能只思考不答） */
 function mdText(m: ChatTurn, i: number): string {
   const c = m.content;
   if (isStreaming(i)) return c ? c + " ▍" : "▍";
-  return c || "（无内容）";
+  if (c) return c;
+  if (m.steps?.length) return "（已执行操作，模型未返回文字说明）";
+  return "（无内容）";
 }
 
-async function copyMsg(m: ChatTurn) {
+function copyMsg(m: ChatTurn) {
   try {
-    await navigator.clipboard.writeText(m.content);
+    void navigator.clipboard.writeText(m.content);
     message.success("已复制");
   } catch {
     message.error("复制失败");
   }
 }
 
+// ===== 工具步骤折叠组（ZCode ToolLayout 模式：运行中自动展开、完成自动收起） =====
+const stepsExpanded = ref<Record<number, boolean>>({});
+
+function hasRunning(m: ChatTurn): boolean {
+  return !!m.steps?.some((s) => s.status === "running");
+}
+
+/** 组是否展开：流式中且有 running 步骤 → 自动展开；否则看用户手动开关 */
+function stepsOpen(i: number, m: ChatTurn): boolean {
+  if (isStreaming(i) && hasRunning(m)) return true;
+  return stepsExpanded.value[i] === true;
+}
+
+function toggleSteps(i: number) {
+  stepsExpanded.value = { ...stepsExpanded.value, [i]: !(stepsExpanded.value[i] === true) };
+}
+
+/** 摘要行进行中文案：正在{类别} {参数}… */
+function runningLabel(m: ChatTurn): string {
+  const r = [...(m.steps ?? [])].reverse().find((s) => s.status === "running");
+  if (!r) return "执行";
+  const d = describeStep(r.name, r.args);
+  return d.kind + (d.detail ? ` ${d.detail}` : "");
+}
+
+/** 步骤总耗时（首末时间戳差，旧数据无时间戳则不显示） */
+function stepsElapsed(m: ChatTurn): string {
+  const ts = (m.steps ?? []).map((s) => s.t).filter((t) => t > 0);
+  if (ts.length < 2) return "";
+  const ms = Math.max(...ts) - Math.min(...ts);
+  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
+}
+
+// ===== 单步详情（点击步骤行展开：完整参数 + 执行结果 JSON） =====
+const stepDetail = ref<Record<string, boolean>>({});
+
+function stepDetailOpen(i: number, si: number): boolean {
+  return stepDetail.value[`${i}:${si}`] === true;
+}
+
+function toggleStepDetail(i: number, si: number) {
+  const k = `${i}:${si}`;
+  stepDetail.value = { ...stepDetail.value, [k]: !(stepDetail.value[k] === true) };
+}
+
+/** JSON 美化（解析失败原样返回） */
+function fmtJson(s: string): string {
+  try {
+    return JSON.stringify(JSON.parse(s) as unknown, null, 2);
+  } catch {
+    return s;
+  }
+}
+
+function prettyArgs(s: ToolStep): string {
+  if (!s.args || s.args === "{}") return "";
+  return fmtJson(s.args);
+}
+
+/** 结果 JSON 的 ok=false 视为失败（红叉 + 错误样式） */
+function stepFailed(s: ToolStep): boolean {
+  if (!s.result) return false;
+  try {
+    const v = JSON.parse(s.result) as { ok?: unknown };
+    return v.ok === false;
+  } catch {
+    return false;
+  }
+}
+
+function hasStepDetail(s: ToolStep): boolean {
+  return !!(prettyArgs(s) || s.result);
+}
+
+// ===== 宽度拖拽（左缘把手，localStorage 持久化） =====
+const WIDTH_KEY = "bm-ai-sidebar-width";
+const MIN_W = 320;
+const MAX_W = 720;
+
+function loadWidth(): number {
+  const raw = Number(localStorage.getItem(WIDTH_KEY));
+  const w = Number.isFinite(raw) && raw > 0 ? raw : 400;
+  return Math.max(MIN_W, Math.min(w, MAX_W));
+}
+const panelWidth = ref(loadWidth());
+const dragging = ref(false);
+
+function onResizeStart(e: MouseEvent) {
+  e.preventDefault();
+  dragging.value = true;
+  const startX = e.clientX;
+  const startW = panelWidth.value;
+  const onMove = (ev: MouseEvent) => {
+    panelWidth.value = Math.max(MIN_W, Math.min(startW + (startX - ev.clientX), MAX_W));
+  };
+  const onUp = () => {
+    dragging.value = false;
+    document.body.style.cursor = "";
+    document.body.style.userSelect = "";
+    try {
+      localStorage.setItem(WIDTH_KEY, String(panelWidth.value));
+    } catch {
+      /* 忽略 */
+    }
+    window.removeEventListener("mousemove", onMove);
+    window.removeEventListener("mouseup", onUp);
+  };
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+}
+
+function resetWidth() {
+  panelWidth.value = 400;
+  try {
+    localStorage.setItem(WIDTH_KEY, "400");
+  } catch {
+    /* 忽略 */
+  }
+}
+
 watch(
-  () => chat.messages.map((m) => m.content.length).join(",") + "|" + chat.messages.length,
+  () => chat.messages.map((m) => `${m.content.length}:${m.steps?.length ?? 0}:${m.steps?.filter((s) => s.status === "running").length ?? 0}`).join(",") + "|" + chat.messages.length,
   () => nextTick(scrollBottom),
 );
 watch(
@@ -107,12 +232,21 @@ watch(
     if (v) nextTick(scrollBottom);
   },
 );
+// 新对话清空消息后重置折叠状态（索引不复用）
+watch(
+  () => chat.messages.length,
+  (n) => {
+    if (n === 0) stepsExpanded.value = {};
+  },
+);
 </script>
 
 <template>
   <Teleport to="body">
     <Transition name="ai-side">
-      <aside v-if="chat.open" class="ai-sidebar">
+      <aside v-if="chat.open" class="ai-sidebar" :class="{ dragging }" :style="{ width: panelWidth + 'px' }">
+        <!-- 左缘宽度拖拽把手（双击复位 400） -->
+        <div class="ai-resizer" title="拖动调节宽度 · 双击复位" @mousedown="onResizeStart" @dblclick="resetWidth" />
         <!-- 头部 -->
         <header class="ai-head">
           <span class="ai-badge">
@@ -158,30 +292,58 @@ watch(
                 </span>
 
                 <div class="msg-body">
-                  <!-- 工具调用行 -->
-                  <div v-if="m.tools?.length" class="msg-tools">
-                    <span
-                      v-for="(t, ti) in m.tools"
-                      :key="ti"
-                      class="tool-chip"
-                      :class="{ pending: isStreaming(i) && ti === m.tools!.length - 1 }"
-                      :title="t"
-                    >
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                  <!-- 工具调用步骤（ZCode 式折叠组：摘要行 + 展开明细） -->
+                  <div v-if="m.steps?.length" class="steps">
+                    <button class="steps-head" @click="toggleSteps(i)">
+                      <LoadingOutlined v-if="hasRunning(m)" class="steps-spin" spin />
+                      <svg v-else class="steps-ok" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
                       </svg>
-                      {{ t }}
-                    </span>
+                      <span class="steps-title">
+                        {{ hasRunning(m) ? `正在${runningLabel(m)}…` : `执行了 ${m.steps.length} 个操作` }}
+                      </span>
+                      <span v-if="!hasRunning(m) && stepsElapsed(m)" class="steps-time">{{ stepsElapsed(m) }}</span>
+                      <RightOutlined class="steps-chev" :class="{ open: stepsOpen(i, m) }" />
+                    </button>
+                    <div v-show="stepsOpen(i, m)" class="steps-body">
+                      <template v-for="(s, si) in m.steps" :key="si">
+                        <div
+                          class="step-row"
+                          :class="{ clickable: hasStepDetail(s), failed: stepFailed(s) }"
+                          :title="hasStepDetail(s) ? '点击查看参数与结果' : undefined"
+                          @click="hasStepDetail(s) && toggleStepDetail(i, si)"
+                        >
+                          <span class="step-status">
+                            <LoadingOutlined v-if="s.status === 'running'" spin />
+                            <svg v-else-if="stepFailed(s)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </span>
+                          <span class="step-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" v-html="describeStep(s.name, s.args).icon" />
+                          </span>
+                          <span class="step-kind">{{ describeStep(s.name, s.args).kind }}</span>
+                          <span v-if="describeStep(s.name, s.args).detail" class="step-detail">{{ describeStep(s.name, s.args).detail }}</span>
+                          <RightOutlined v-if="hasStepDetail(s)" class="step-chev" :class="{ open: stepDetailOpen(i, si) }" />
+                        </div>
+                        <div v-if="stepDetailOpen(i, si)" class="step-box">
+                          <div v-if="prettyArgs(s)" class="step-json">
+                            <div class="step-json-label">参数</div>
+                            <pre>{{ prettyArgs(s) }}</pre>
+                          </div>
+                          <div v-if="s.result" class="step-json" :class="{ err: stepFailed(s) }">
+                            <div class="step-json-label">{{ stepFailed(s) ? "错误" : "结果" }}</div>
+                            <pre>{{ fmtJson(s.result) }}</pre>
+                          </div>
+                        </div>
+                      </template>
+                    </div>
                   </div>
 
-                  <MdPreview
-                    :model-value="mdText(m, i)"
-                    :theme="themeStore.isDark ? 'dark' : 'light'"
-                    preview-theme="github"
-                    code-theme="github"
-                    :footers="[]"
-                    class="ai-md"
-                  />
+                  <MdStreamPreview :source="mdText(m, i)" :streaming="isStreaming(i)" :dark="themeStore.isDark" />
 
                   <button class="msg-copy" title="复制全文" @click="copyMsg(m)">
                     <CopyOutlined />
@@ -237,12 +399,39 @@ watch(
   z-index: 90;
   display: flex;
   flex-direction: column;
-  width: 400px;
   background: var(--bg-surface);
   border: 1px solid var(--border-light);
   border-radius: var(--radius-panel, 14px);
   box-shadow: var(--shadow-panel-hover);
   overflow: hidden;
+}
+
+/* 左缘拖拽把手 */
+.ai-resizer {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  cursor: col-resize;
+  z-index: 5;
+}
+.ai-resizer::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  background: transparent;
+  transition: background var(--transition-fast);
+}
+.ai-resizer:hover::after,
+.ai-sidebar.dragging .ai-resizer::after {
+  background: var(--color-primary);
+}
+.ai-sidebar.dragging {
+  transition: none;
 }
 
 /* 滑入/滑出 */
@@ -395,148 +584,173 @@ watch(
   min-width: 0;
 }
 
-/* 工具调用行：内容上方轻量 chips */
-.msg-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 7px;
+/* ===== 工具步骤折叠组（ZCode ToolCallBlock 模式） ===== */
+.steps {
+  margin-bottom: 8px;
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--text-primary) 2%, transparent);
+  overflow: hidden;
 }
-.tool-chip {
-  display: inline-flex;
+.steps-head {
+  display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  text-align: left;
+}
+.steps-head:hover {
+  background: color-mix(in srgb, var(--text-primary) 3%, transparent);
+}
+.steps-spin {
   font-size: 10px;
-  font-family: "JetBrains Mono", Consolas, monospace;
   color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 7%, transparent);
-  border: 1px solid color-mix(in srgb, var(--color-primary) 22%, transparent);
-  border-radius: 6px;
-  padding: 2px 8px;
-  max-width: 100%;
+}
+.steps-ok {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  color: #16a34a;
+}
+.steps-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tool-chip svg {
-  width: 9px;
-  height: 9px;
+.steps-time {
   flex-shrink: 0;
+  font-size: 10px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
 }
-.tool-chip.pending {
-  animation: chip-pulse 1.1s ease-in-out infinite;
+.steps-chev {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
 }
-@keyframes chip-pulse {
-  50% { opacity: 0.45; }
+.steps-chev.open {
+  transform: rotate(90deg);
 }
-
-/* Markdown 精修（窄侧栏排版） */
-.msg-body :deep(.md-editor-preview-wrapper) {
-  padding: 0;
+.steps-body {
+  border-top: 1px solid var(--border-light);
+  padding: 4px 0;
 }
-.msg-body :deep(.md-editor-preview) {
-  font-size: 12.5px;
-  line-height: 1.7;
+.step-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  min-width: 0;
+}
+.step-status {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 12px;
+  color: #16a34a;
+  font-size: 10px;
+}
+.step-status .anticon {
+  font-size: 10px;
+  color: var(--color-primary);
+}
+.step-status svg {
+  width: 10px;
+  height: 10px;
+}
+.step-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+.step-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.step-kind {
+  flex-shrink: 0;
+  font-weight: 500;
   color: var(--text-primary);
+}
+.step-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-tertiary);
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 10.5px;
+}
+.step-row.clickable {
+  cursor: pointer;
+}
+.step-row.clickable:hover {
+  background: color-mix(in srgb, var(--text-primary) 3%, transparent);
+}
+.step-row.failed .step-kind {
+  color: #dc2626;
+}
+.step-row.failed .step-status {
+  color: #dc2626;
+}
+.step-chev {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 8px;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+}
+.step-chev.open {
+  transform: rotate(90deg);
+}
+/* 单步详情面板：完整参数 + 结果 JSON */
+.step-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 2px 10px 6px 30px;
+}
+.step-json-label {
+  font-size: 10px;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+.step-json pre {
+  margin: 0;
+  padding: 6px 8px;
+  font-family: "JetBrains Mono", Consolas, monospace;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: color-mix(in srgb, var(--text-primary) 3%, transparent);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
   word-break: break-word;
 }
-.msg-body :deep(.md-editor-preview p) {
-  margin: 0 0 8px;
-}
-.msg-body :deep(.md-editor-preview p:last-child) {
-  margin-bottom: 0;
-}
-.msg-body :deep(.md-editor-preview h1),
-.msg-body :deep(.md-editor-preview h2),
-.msg-body :deep(.md-editor-preview h3),
-.msg-body :deep(.md-editor-preview h4) {
-  margin: 14px 0 6px;
-  font-size: 13px;
-  font-weight: 650;
-  line-height: 1.4;
-}
-.msg-body :deep(.md-editor-preview h1:first-child),
-.msg-body :deep(.md-editor-preview h2:first-child),
-.msg-body :deep(.md-editor-preview h3:first-child) {
-  margin-top: 0;
-}
-.msg-body :deep(.md-editor-preview ul),
-.msg-body :deep(.md-editor-preview ol) {
-  margin: 0 0 8px;
-  padding-left: 18px;
-}
-.msg-body :deep(.md-editor-preview li) {
-  margin: 2px 0;
-}
-.msg-body :deep(.md-editor-preview blockquote) {
-  margin: 8px 0;
-  padding: 2px 10px;
-  border-left: 2px solid color-mix(in srgb, var(--color-primary) 55%, transparent);
-  background: color-mix(in srgb, var(--color-primary) 5%, transparent);
-  border-radius: 0 6px 6px 0;
-  color: var(--text-secondary);
-}
-.msg-body :deep(.md-editor-preview blockquote p) {
-  margin: 4px 0;
-}
-.msg-body :deep(.md-editor-preview code:not(pre code)) {
-  padding: 1px 5px;
-  font-size: 11px;
-  font-family: "JetBrains Mono", Consolas, monospace;
-  color: var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  border-radius: 4px;
-}
-.msg-body :deep(.md-editor-preview pre) {
-  margin: 8px 0;
-  padding: 9px 11px;
-  font-size: 11px;
-  line-height: 1.6;
-  background: var(--bg-input);
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  overflow-x: auto;
-}
-.msg-body :deep(.md-editor-preview pre code) {
-  font-family: "JetBrains Mono", Consolas, monospace;
-  background: transparent;
-  padding: 0;
-}
-.msg-body :deep(.md-editor-preview table) {
-  width: 100%;
-  margin: 8px 0;
-  font-size: 11.5px;
-  border-collapse: collapse;
-}
-.msg-body :deep(.md-editor-preview th),
-.msg-body :deep(.md-editor-preview td) {
-  padding: 4px 8px;
-  border: 1px solid var(--border-light);
-  text-align: left;
-}
-.msg-body :deep(.md-editor-preview th) {
-  background: var(--bg-input);
-  font-weight: 600;
-}
-.msg-body :deep(.md-editor-preview a) {
-  color: var(--color-primary);
-  text-decoration: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--color-primary) 35%, transparent);
-}
-.msg-body :deep(.md-editor-preview hr) {
-  margin: 10px 0;
-  border: none;
-  border-top: 1px solid var(--border-light);
-}
-.msg-body :deep(.md-editor-preview img) {
-  max-width: 100%;
-  border-radius: 8px;
+.step-json.err pre {
+  color: #dc2626;
+  border-color: color-mix(in srgb, #dc2626 30%, transparent);
 }
 
-/* 流式光标（内联 ▍ 字符渲染增强） */
-.msg-body :deep(.md-editor-preview p:last-child),
-.msg-body :deep(.md-editor-preview li:last-child) {
-  /* 光标字符由 mdText 注入，这里不做特殊处理 */
+/* Markdown：MdStreamPreview 自带紧凑样式，侧栏微调字号 */
+.msg-body :deep(.md-lite) {
+  font-size: 12.5px;
 }
 
 /* hover 复制按钮 */

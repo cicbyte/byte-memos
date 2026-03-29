@@ -30,6 +30,8 @@ pub enum StreamChunk {
     Thinking { content: String },
     /// 工具调用发起（侧边栏 agent 循环；前端展示「正在执行工具」）
     Tool { name: String, args: String },
+    /// 工具执行结束（result 为宿主返回的 JSON 文本；前端展示详情/成败）
+    ToolResult { name: String, result: String },
     /// 流结束（full = 聚合全文）
     Done { full: String },
     /// 流内错误（取消完成时不发 Error，静默收尾）

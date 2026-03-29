@@ -24,8 +24,17 @@ pub struct ToolExec {
     pub args_json: String,
 }
 
-/// agent 事件回调：(正文增量, 思考增量, 工具调用可选项)
-pub type AgentDelta<'a> = dyn FnMut(&str, &str, Option<&ToolExec>) + Send + 'a;
+/// 工具事件（agent 增量回调的可选项）：发起 / 结束
+#[derive(Debug)]
+pub enum ToolDeltaEvent<'a> {
+    /// 模型发起调用（执行前）
+    Start(&'a ToolExec),
+    /// 宿主执行结束（result 为返回的 JSON 文本）
+    End { name: &'a str, result: &'a str },
+}
+
+/// agent 事件回调：(正文增量, 思考增量, 工具事件可选项)
+pub type AgentDelta<'a> = dyn FnMut(&str, &str, Option<&ToolDeltaEvent<'_>>) + Send + 'a;
 
 /// agent 循环上限（单次对话内最多工具轮数，防失控）
 const MAX_TOOL_ROUNDS: usize = 8;
@@ -41,7 +50,7 @@ pub async fn run_stream(
     on_delta: &mut OnDelta<'_>,
     cancel: &CancellationToken,
 ) -> Result<String> {
-    let mut wrapped = |t: &str, th: &str, _: Option<&ToolExec>| on_delta(t, th);
+    let mut wrapped = |t: &str, th: &str, _: Option<&ToolDeltaEvent<'_>>| on_delta(t, th);
     let mut noop = |_: &ToolExec| String::new();
     run_agent(cfg, system, &[], user, Vec::new(), &mut noop, &mut wrapped, cancel).await
 }
@@ -55,7 +64,7 @@ pub async fn run_chat_stream(
     on_delta: &mut OnDelta<'_>,
     cancel: &CancellationToken,
 ) -> Result<String> {
-    let mut wrapped = |t: &str, th: &str, _: Option<&ToolExec>| on_delta(t, th);
+    let mut wrapped = |t: &str, th: &str, _: Option<&ToolDeltaEvent<'_>>| on_delta(t, th);
     let mut noop = |_: &ToolExec| String::new();
     run_agent(cfg, system, history, user, Vec::new(), &mut noop, &mut wrapped, cancel).await
 }
@@ -171,7 +180,7 @@ async fn run_agent(
                                 name: tc.function.name.clone(),
                                 args_json: tc.function.arguments.to_string(),
                             };
-                            on_delta("", "", Some(&exec));
+                            on_delta("", "", Some(&ToolDeltaEvent::Start(&exec)));
                             tool_calls.push(tc);
                         }
                     }
@@ -200,6 +209,14 @@ async fn run_agent(
                         args_json: tc.function.arguments.to_string(),
                     };
                     let result_text = execute(&exec);
+                    on_delta(
+                        "",
+                        "",
+                        Some(&ToolDeltaEvent::End {
+                            name: &exec.name,
+                            result: &result_text,
+                        }),
+                    );
                     results.push(UserContent::ToolResult(ToolResult {
                         call: tc.id.clone(),
                         provider: None,
@@ -342,8 +359,8 @@ mod tests {
             r#"{"ok":true,"now":"2026-02-06 12:00:00"}"#.to_string()
         };
         let mut tool_seen = false;
-        let mut cb = |_: &str, _: &str, tool: Option<&ToolExec>| {
-            if tool.is_some() {
+        let mut cb = |_: &str, _: &str, tool: Option<&ToolDeltaEvent<'_>>| {
+            if matches!(tool, Some(ToolDeltaEvent::Start(_))) {
                 tool_seen = true;
             }
         };
@@ -363,5 +380,69 @@ mod tests {
         assert!(tool_seen, "未收到 ToolCall 事件");
         assert!(called.load(std::sync::atomic::Ordering::SeqCst), "执行器未被调用");
         assert!(!full.trim().is_empty(), "工具轮后无最终文本");
+    }
+
+    /// 全链路复现（侧边栏场景）：真实内置工具 + 同款系统提示词 + create_memo 类指令，
+    /// 打印事件序列（TOOL/TEXT/THINK）与最终全文，验证 Tool 事件与收尾文本。
+    /// 注意 max_tokens 需给足（qwen3.5 思考 token 计入预算，64 会被思考烧光）
+    #[tokio::test]
+    #[ignore = "需要本机 Ollama 与 qwen3.5:4b 模型（内置工具全链路）"]
+    async fn ollama_local_builtin_tools_poem() {
+        let cfg = ProviderConfig {
+            provider_key: "ollama".into(),
+            base_url: "http://localhost:11434".into(),
+            api_key: String::new(),
+            model: "qwen3.5:4b".into(),
+            max_tokens: 1024,
+            temperature: 0.2,
+        };
+        let tools = crate::ai::tools::definitions();
+        let events: std::sync::Arc<std::sync::Mutex<Vec<String>>> =
+            std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        // 不落库：模拟执行成功，隔离 UI 问题
+        let mut tool_calls = 0usize;
+        let execute = move |exec: &ToolExec| {
+            tool_calls += 1;
+            format!("{{\"ok\":true,\"short_id\":\"test{}\",\"title\":\"诗\"}}", tool_calls)
+        };
+        let ev2 = events.clone();
+        let mut cb = move |t: &str, th: &str, tool: Option<&ToolDeltaEvent<'_>>| {
+            let mut e = ev2.lock().unwrap();
+            if let Some(ToolDeltaEvent::Start(x)) = tool {
+                e.push(format!("TOOL {} args={}", x.name, x.args_json));
+            } else if let Some(ToolDeltaEvent::End { name, result }) = tool {
+                e.push(format!("TOOL_END {} result={}", name, result));
+            } else if !th.is_empty() {
+                let n = e.last_mut().filter(|s| s.starts_with("THINK")).map(|s| s.len()).unwrap_or(0);
+                if n == 0 {
+                    e.push(format!("THINK({})", th.len()));
+                } else if let Some(s) = e.last_mut() {
+                    *s = format!("THINK({})", s.len() - 6 + th.len());
+                }
+            } else if !t.is_empty() {
+                e.push(format!("TEXT[{}]", t));
+            }
+        };
+        let system = "你是 byte-memos 备忘录应用内置的 AI 助手。用简体中文简洁回答，可使用 Markdown 排版。\
+                      你有内置工具可以查询与操作用户的备忘录（搜索、列出、读取、创建、更新、删除、分类/标签/统计），\
+                      涉及用户数据的问题优先调用工具获取真实数据，不要编造；用户明确要求记录/保存时用 create_memo。";
+        let cancel = CancellationToken::new();
+        let full = run_agent_stream(&cfg, system, &[], "添加一首随机李白的诗", tools, execute, &mut cb, &cancel)
+            .await
+            .expect("全链路失败");
+        let e = events.lock().unwrap();
+        eprintln!("== EVENTS({}) ==", e.len());
+        for x in e.iter() {
+            eprintln!("  {x}");
+        }
+        eprintln!("== FULL = {full:?}");
+        assert!(
+            e.iter().any(|x| x.starts_with("TOOL ")),
+            "未收到 TOOL 事件（模型未调用工具）"
+        );
+        assert!(
+            e.iter().any(|x| x.starts_with("TOOL_END")),
+            "未收到 TOOL_END 事件（执行结果未回传）"
+        );
     }
 }
