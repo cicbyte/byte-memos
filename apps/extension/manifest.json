@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "byte-memos 剪藏",
+  "version": "0.1.0",
+  "description": "一键把网页内容保存到本地 byte-memos 备忘录（需在应用内开启 REST API 服务）",
+  "permissions": ["contextMenus", "storage", "activeTab", "scripting", "notifications"],
+  "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "byte-memos 剪藏"
+  },
+  "options_page": "options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

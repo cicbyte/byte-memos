@@ -1,0 +1,115 @@
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  width: 300px;
+  margin: 0;
+  padding: 12px;
+  font: 13px/1.5 system-ui, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: #fafafa;
+  color: #1f2328;
+}
+
+@media (prefers-color-scheme: dark) {
+  body { background: #1c1e21; color: #e6e8ea; }
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.logo { color: #6366f1; }
+.title { flex: 1; font-weight: 600; }
+.icon-btn {
+  border: none;
+  background: transparent;
+  font-size: 15px;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+.icon-btn:hover { opacity: 1; background: rgba(127, 127, 127, 0.15); }
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  margin-bottom: 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  background: rgba(127, 127, 127, 0.1);
+}
+.status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #9ca3af;
+  flex-shrink: 0;
+}
+.status.ok .dot { background: #22c55e; }
+.status.fail .dot { background: #ef4444; }
+.status.warn .dot { background: #f59e0b; }
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 9px 10px;
+  font: inherit;
+  border: 1px solid rgba(127, 127, 127, 0.35);
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  resize: vertical;
+  min-height: 76px;
+  outline: none;
+}
+textarea:focus { border-color: #6366f1; }
+
+.attach {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 4px;
+  font-size: 12px;
+  opacity: 0.85;
+  cursor: pointer;
+}
+
+.page-info {
+  font-size: 11px;
+  opacity: 0.6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+
+.save {
+  width: 100%;
+  margin-top: 6px;
+  padding: 8px 0;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.save:hover { filter: brightness(1.06); }
+.save:disabled { opacity: 0.5; cursor: default; }
+
+.result {
+  margin-top: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+.result.ok { background: rgba(34, 197, 94, 0.12); color: #16a34a; }
+.result.fail { background: rgba(239, 68, 68, 0.12); color: #dc2626; }

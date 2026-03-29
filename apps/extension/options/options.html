@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>byte-memos 剪藏 · 设置</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <main class="card">
+    <h1>byte-memos 剪藏 · 设置</h1>
+
+    <section>
+      <h2>1. 先在 byte-memos 应用里开启服务</h2>
+      <p class="hint">
+        打开 byte-memos → 左侧「REST API 服务」→ 启动服务（默认端口 <code>8318</code>）。
+        若勾选了 API Key 认证，把设置页显示的 Key 填到下面。本机回环访问在应用侧开启「本机免 Key」时可留空。
+      </p>
+    </section>
+
+    <section>
+      <h2>2. 服务地址</h2>
+      <input id="serverUrl" type="text" placeholder="http://127.0.0.1:8318/api/v1" spellcheck="false" />
+      <p class="hint">默认本机 8318 端口；若改了端口或部署在别处，填完整地址到 <code>/api/v1</code> 为止。</p>
+    </section>
+
+    <section>
+      <h2>3. API Key（可选）</h2>
+      <div class="row">
+        <input id="apiKey" type="password" placeholder="未启用认证可留空" spellcheck="false" />
+        <button id="toggleKey" class="ghost" type="button">显示</button>
+      </div>
+    </section>
+
+    <div class="actions">
+      <button id="test">测试连接</button>
+      <button id="save" class="primary">保存</button>
+    </div>
+    <div id="result" class="result" hidden></div>
+  </main>
+
+  <script src="options.js"></script>
+</body>
+</html>
