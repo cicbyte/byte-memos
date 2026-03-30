@@ -116,7 +116,7 @@ class _TabSpec {
 }
 
 const _tabs = [
-  _TabSpec('流', Icons.blur_on_rounded),
+  _TabSpec('首页', Icons.blur_on_rounded),
   _TabSpec('搜索', Icons.search_rounded),
   _TabSpec('统计', Icons.insights_rounded),
   _TabSpec('我的', Icons.person_rounded),

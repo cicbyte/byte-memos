@@ -251,7 +251,7 @@ class _TrashCard extends ConsumerWidget {
               final ok = await ref.read(trashProvider.notifier).restore(item.shortId);
               if (!context.mounted) return;
               ScaffoldMessenger.of(context)
-                  .showSnackBar(SnackBar(content: Text(ok ? '已恢复到备忘流' : '恢复失败')));
+                  .showSnackBar(SnackBar(content: Text(ok ? '已恢复到备忘录' : '恢复失败')));
             },
             child: GlassContainer(
               tier: GlassTier.regular,

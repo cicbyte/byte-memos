@@ -32,7 +32,7 @@ class FlowPage extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text('备忘流', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
+              Text('备忘录', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
               const SizedBox(width: 10),
               Text(
                 DateFormat('M月d日 · ', 'zh').format(DateTime.now()) +
