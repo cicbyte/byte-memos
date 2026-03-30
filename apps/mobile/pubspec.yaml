@@ -34,9 +34,12 @@ dependencies:
   # 日期格式化（中文按天分组）
   intl: ^0.20.0
 
-  # 系统分享出去（详情页）
+  # 系统分享出去（详情页 / 附件转发）
   share_plus: ^10.1.4
   mobile_scanner: ^7.4.2
+
+  # 相册选图（编辑弹层附加图片，D2 收尾）
+  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:

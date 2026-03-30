@@ -1,15 +1,18 @@
 /// 新建/编辑玻璃弹层（thick 材质模态）
 ///
 /// - 纯文本输入 + Markdown 预览切换
-/// - 常用格式快捷条（标题/列表/加粗/代码/引用）
+/// - 常用格式快捷条（标题/列表/加粗/代码/引用）+ 相册选图（附件）
 /// - 标题 / 分类 / 标签
 /// - 编辑已有备忘时传入 [memo]
 /// - [prefill]：分享收纳（F06）预填内容
 library;
 
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../conn/models.dart';
 import '../design/glass.dart';
@@ -47,6 +50,9 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
   bool _saving = false;
   final _focus = FocusNode();
 
+  /// 待附加图片（编辑弹层收尾：相册选图 → 保存时随备忘上传）
+  final List<XFile> _picks = [];
+
   @override
   void initState() {
     super.initState();
@@ -76,9 +82,36 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
     _focus.requestFocus();
   }
 
+  Future<void> _pickImages() async {
+    final picker = ImagePicker();
+    try {
+      final files = await picker.pickMultiImage(imageQuality: 85, limit: 6);
+      if (files.isNotEmpty) setState(() => _picks.addAll(files.take(6 - _picks.length)));
+    } catch (_) {
+      _toast('选图失败');
+    }
+  }
+
+  /// 图片后缀推断 mime（image_picker 在部分 ROM 不给 mimeType）
+  String _mimeOf(XFile f) {
+    final mt = f.mimeType;
+    if (mt != null && mt.startsWith('image/')) return mt;
+    final ext = f.path.split('.').last.toLowerCase();
+    return switch (ext) {
+      'png' => 'image/png',
+      'gif' => 'image/gif',
+      'webp' => 'image/webp',
+      'bmp' => 'image/bmp',
+      _ => 'image/jpeg',
+    };
+  }
+
   Future<void> _save() async {
-    final content = _content.text.trim();
-    if (content.isEmpty || _saving) return;
+    if (_saving) return;
+    final rawContent = _content.text.trim();
+    if (rawContent.isEmpty && _picks.isEmpty) return;
+    // 只附图不写字：占位正文
+    final content = rawContent.isEmpty ? '（图片×${_picks.length}）' : rawContent;
     setState(() => _saving = true);
 
     final client = ref.read(connProvider).client;
@@ -91,25 +124,37 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
     final tags = _tags.text.split(RegExp(r'[,，]')).map((e) => e.trim().replaceAll('#', '')).where((e) => e.isNotEmpty).toList();
 
     try {
+      final Memo m;
       if (widget.memo == null) {
-        final m = await client.addMemo(
+        m = await client.addMemo(
           content: content,
           title: _title.text.trim(),
           category: _category,
           tags: tags,
         );
-        ref.read(memosProvider.notifier).upsert(m);
       } else {
-        final m = await client.updateMemo(
+        m = await client.updateMemo(
           widget.memo!.shortId,
           content: content,
           title: _title.text.trim(),
           category: _category,
           tags: tags,
         );
-        ref.read(memosProvider.notifier).upsert(m);
       }
+      // 附加图片上传（失败不阻断保存，toast 提示）
+      var uploadFail = 0;
+      for (final f in _picks) {
+        try {
+          final bytes = await File(f.path).readAsBytes();
+          final name = f.name.isEmpty ? 'img-${DateTime.now().millisecondsSinceEpoch}.jpg' : f.name;
+          await client.uploadAttachment(m.shortId, filename: name, mimeType: _mimeOf(f), bytes: bytes);
+        } catch (_) {
+          uploadFail++;
+        }
+      }
+      ref.read(memosProvider.notifier).upsert(m);
       if (mounted) Navigator.pop(context);
+      if (uploadFail > 0) _toast('$uploadFail 张图片上传失败');
     } catch (e) {
       _toast('保存失败：$e');
       setState(() => _saving = false);
@@ -249,7 +294,7 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
               ),
               const SizedBox(height: 8),
 
-              // 格式快捷条
+              // 格式快捷条（尾：相册选图）
               SizedBox(
                 height: 36,
                 child: Row(
@@ -260,10 +305,70 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
                     _fmtBtn(context, 'B', () => _insertAround('**', '**'), bold: true),
                     _fmtBtn(context, '`', () => _insertAround('`', '`'), mono: true),
                     _fmtBtn(context, '❝', () => _insertAround('\n> ', '')),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: _picks.length >= 6 ? null : _pickImages,
+                      child: Container(
+                        width: 40,
+                        decoration: BoxDecoration(
+                          color: kPrimary.withValues(alpha: _picks.length >= 6 ? 0.06 : 0.14),
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Icon(Icons.image_rounded, size: 16, color: kPrimary.withValues(alpha: _picks.length >= 6 ? 0.4 : 1)),
+                            if (_picks.isNotEmpty)
+                              Positioned(
+                                right: 2,
+                                top: 2,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(color: kPrimary, borderRadius: BorderRadius.circular(7)),
+                                  child: Text('${_picks.length}', style: const TextStyle(fontSize: 8.5, color: Colors.white)),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 8),
+
+              // 待传图片条
+              if (_picks.isNotEmpty)
+                SizedBox(
+                  height: 64,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _picks.length,
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
+                    itemBuilder: (_, i) => Stack(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(File(_picks[i].path), width: 64, height: 64, fit: BoxFit.cover),
+                        ),
+                        Positioned(
+                          right: -2,
+                          top: -2,
+                          child: GestureDetector(
+                            onTap: () => setState(() => _picks.removeAt(i)),
+                            child: Container(
+                              width: 18,
+                              height: 18,
+                              decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                              child: const Icon(Icons.close_rounded, size: 12, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (_picks.isNotEmpty) const SizedBox(height: 8),
 
               // 正文 / 预览
               Expanded(

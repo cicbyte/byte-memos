@@ -538,6 +538,7 @@ class _AttThumb extends ConsumerWidget {
               )
             : GestureDetector(
                 onTap: () => _openViewer(context, bytes),
+                onLongPress: () => _share(context, bytes),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(12),
                   child: Image.memory(bytes, width: 86, height: 86, fit: BoxFit.cover),
@@ -545,6 +546,14 @@ class _AttThumb extends ConsumerWidget {
               );
         return thumb;
       },
+    );
+  }
+
+  /// 附件图片转发出去（系统分享，走 XFile 临时文件语义）
+  Future<void> _share(BuildContext context, Uint8List bytes) async {
+    await Share.shareXFiles(
+      [XFile.fromData(bytes, name: att.filename, mimeType: att.mimeType)],
+      subject: att.filename,
     );
   }
 
@@ -556,11 +565,33 @@ class _AttThumb extends ConsumerWidget {
         backgroundColor: Colors.transparent,
         body: GestureDetector(
           onTap: () => Navigator.pop(context),
-          child: Center(
-            child: InteractiveViewer(
-              maxScale: 5,
-              child: Image.memory(bytes),
-            ),
+          child: Stack(
+            children: [
+              Center(
+                child: InteractiveViewer(
+                  maxScale: 5,
+                  child: Image.memory(bytes),
+                ),
+              ),
+              // 右上：转发出去
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: GestureDetector(
+                      onTap: () => _share(context, bytes),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                        child: const Icon(Icons.ios_share_rounded, size: 18, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
