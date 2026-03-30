@@ -7,8 +7,8 @@ authors.workspace = true
 license.workspace = true
 
 [features]
-# MCP 服务器（CLI 和桌面端按需启用）
-mcp = ["dep:rmcp", "dep:schemars", "dep:axum", "dep:tokio", "dep:tokio-util"]
+# MCP 服务器（CLI 和桌面端按需启用）；rest/ai.rs 的 SSE 流需要 futures
+mcp = ["dep:rmcp", "dep:schemars", "dep:axum", "dep:tokio", "dep:tokio-util", "dep:futures"]
 # AI 能力（rig-core 统一 provider 层：流式补全/多提供商；桌面端启用，CLI 可不启）
 ai = ["dep:rig-core", "dep:tokio", "dep:tokio-util", "dep:base64", "dep:windows", "dep:futures", "dep:reqwest"]
 

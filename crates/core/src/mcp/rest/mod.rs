@@ -16,6 +16,8 @@ mod state;
 mod stats;
 mod trash;
 mod attachments;
+#[cfg(feature = "ai")]
+mod ai;
 
 use std::sync::Arc;
 
@@ -41,6 +43,8 @@ use docs::{openapi_spec, swagger_ui};
 use stats::{stats_overview, tag_stats};
 use trash::{empty_trash, list_trashed, purge_item, restore_item};
 use attachments::{delete_attachment_rest, download_attachment, list_attachments, upload_attachment};
+#[cfg(feature = "ai")]
+use ai::{ai_chat_stream, list_ai_providers};
 
 // ============ 启动函数 ============
 
@@ -130,7 +134,7 @@ fn api_router(state: ApiState) -> Router {
 }
 
 fn build_routes() -> Router<ApiState> {
-    Router::new()
+    let routes = Router::new()
         // 备忘录
         .route("/memos", get(list_memos).post(add_memo))
         .route("/memos/{id}", get(get_memo).put(update_memo).delete(remove_memo))
@@ -150,5 +154,11 @@ fn build_routes() -> Router<ApiState> {
         // 回收站
         .route("/trash", get(list_trashed).post(empty_trash))
         .route("/trash/{type}/{id}/restore", post(restore_item))
-        .route("/trash/{type}/{id}", delete(purge_item))
+        .route("/trash/{type}/{id}", delete(purge_item));
+    // AI（D3：移动端对话，SSE 流式；需要 ai feature）
+    #[cfg(feature = "ai")]
+    let routes = routes
+        .route("/ai/providers", get(list_ai_providers))
+        .route("/ai/chat/stream", post(ai_chat_stream));
+    routes
 }

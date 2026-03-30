@@ -11,7 +11,8 @@ name = "bm"
 path = "src/main.rs"
 
 [dependencies]
-byte-memos-core = { path = "../../crates/core", features = ["mcp"] }
+# ai feature：bm api serve 也能给移动端提供 AI SSE 对话（供应商配置与桌面端共享同一 DB）
+byte-memos-core = { path = "../../crates/core", features = ["mcp", "ai"] }
 anyhow.workspace = true
 clap = { version = "4", features = ["derive", "color"] }
 serde.workspace = true

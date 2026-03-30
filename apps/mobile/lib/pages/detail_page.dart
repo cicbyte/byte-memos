@@ -356,7 +356,7 @@ class _AttThumb extends ConsumerWidget {
     Navigator.of(context).push(PageRouteBuilder(
       opaque: false,
       barrierColor: Colors.black87,
-      pageBuilder: (_, __, ___) => Scaffold(
+      pageBuilder: (_, _, _) => Scaffold(
         backgroundColor: Colors.transparent,
         body: GestureDetector(
           onTap: () => Navigator.pop(context),

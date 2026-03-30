@@ -141,6 +141,34 @@ class AttachmentDto {
       );
 }
 
+/// AI 供应商（D3；不含 Key）
+class AiProvider {
+  const AiProvider({
+    required this.id,
+    required this.name,
+    required this.providerKey,
+    required this.model,
+    required this.models,
+    required this.isEnabled,
+  });
+
+  final int id;
+  final String name;
+  final String providerKey;
+  final String model;
+  final List<String> models;
+  final bool isEnabled;
+
+  factory AiProvider.fromJson(Map<String, dynamic> j) => AiProvider(
+        id: (j['id'] as num).toInt(),
+        name: j['name'] as String? ?? '',
+        providerKey: j['provider_key'] as String? ?? '',
+        model: j['model'] as String? ?? '',
+        models: (j['models'] as List<dynamic>?)?.map((e) => e as String).toList() ?? const [],
+        isEnabled: j['is_enabled'] as bool? ?? false,
+      );
+}
+
 /// 回收站条目（软删除备忘，与桌面端 TrashedItem 对齐）
 class TrashedItem {
   const TrashedItem({

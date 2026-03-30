@@ -4,6 +4,7 @@
 /// 所有错误统一抛 [BmApiException]，UI 层按 status 区分提示。
 library;
 
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
@@ -186,6 +187,74 @@ class BmClient {
           options: Options(responseType: ResponseType.bytes),
         ));
     return resp;
+  }
+
+  // ===== AI（D3） =====
+
+  /// 供应商与模型列表（不含 Key）
+  Future<List<AiProvider>> aiProviders() async {
+    final data = await _guard(() => _dio.get<dynamic>('/ai/providers'));
+    return (data as List<dynamic>).map((e) => AiProvider.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// SSE 流式对话。onEvent 收 (event, payload)；event ∈ delta/thinking/done/error
+  /// cancelToken 可中断（服务端检测断开后取消上游 AI 请求）
+  Future<void> aiChatStream(
+    List<Map<String, String>> messages, {
+    int? providerId,
+    String? model,
+    void Function(String event, Map<String, dynamic> data)? onEvent,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final resp = await _dio.post<ResponseBody>(
+        '/ai/chat/stream',
+        data: {
+          'messages': messages,
+          'provider_id': providerId,
+          'model': model,
+        },
+        options: Options(
+          responseType: ResponseType.stream,
+          headers: {'Accept': 'text/event-stream'},
+          receiveTimeout: const Duration(hours: 1), // SSE 流式：块间隔可能很长（模型思考），不能掐 10s
+        ),
+        cancelToken: cancelToken,
+      );
+      final body = resp.data;
+      if (body == null) throw const BmApiException(0, '无响应体');
+      var buf = '';
+      await for (final chunk in body.stream) {
+        buf += utf8.decode(chunk);
+        // SSE 事件以空行分隔
+        while (true) {
+          final idx = buf.indexOf('\n\n');
+          if (idx < 0) break;
+          final rawEvent = buf.substring(0, idx);
+          buf = buf.substring(idx + 2);
+          String? event;
+          String? dataLine;
+          for (final line in rawEvent.split('\n')) {
+            if (line.startsWith('event:')) {
+              event = line.substring(6).trim();
+            } else if (line.startsWith('data:')) {
+              dataLine = line.substring(5).trim();
+            }
+          }
+          if (event != null && dataLine != null) {
+            Map<String, dynamic> payload;
+            try {
+              payload = jsonDecode(dataLine) as Map<String, dynamic>;
+            } catch (_) {
+              continue;
+            }
+            onEvent?.call(event, payload);
+          }
+        }
+      }
+    } on DioException catch (e) {
+      throw BmApiException(e.response?.statusCode ?? 0, e.message ?? '网络错误');
+    }
   }
 
   // ===== 回收站（删除撤回用） =====

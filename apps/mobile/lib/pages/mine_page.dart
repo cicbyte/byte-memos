@@ -11,6 +11,7 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
+import 'ai_chat_page.dart';
 import 'pair_scan_page.dart';
 import 'trash_page.dart';
 
@@ -34,6 +35,8 @@ class MinePage extends ConsumerWidget {
         // ===== 数据 =====
         _SectionLabel('数据', fg),
         _TrashEntry(fg: fg),
+        const SizedBox(height: 10),
+        _AiEntry(fg: fg),
         const SizedBox(height: 18),
 
         // ===== 连接 =====
@@ -352,6 +355,39 @@ class _SectionLabel extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Text(text, style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: fg.withValues(alpha: 0.55))),
+    );
+  }
+}
+
+/// AI 助手入口（D3）
+class _AiEntry extends StatelessWidget {
+  const _AiEntry({required this.fg});
+
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      tier: GlassTier.flat,
+      preference: GlassPreference.auto,
+      borderRadius: BorderRadius.circular(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: LinearGradient(colors: [kPrimary.withValues(alpha: 0.3), kAccent.withValues(alpha: 0.3)]),
+          ),
+          child: Icon(Icons.auto_awesome_rounded, size: 17, color: kPrimary),
+        ),
+        title: Text('AI 助手', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+        subtitle: Text('对话 · 流式 · 沿用桌面端模型', style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
+        trailing: Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
+        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiChatPage())),
+      ),
     );
   }
 }
