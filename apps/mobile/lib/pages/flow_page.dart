@@ -10,6 +10,7 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
+import '../util/checklist.dart';
 import '../widgets/memo_card.dart';
 import 'detail_page.dart';
 
@@ -57,46 +58,59 @@ class FlowPage extends ConsumerWidget {
   }
 }
 
-/// 分类筛选条：全部 + 各分类（横向滚动胶囊）
+/// 分类筛选条：待办 + 全部 + 各分类（横向滚动胶囊；待办与分类互斥）
 class _CategoryBar extends ConsumerWidget {
   const _CategoryBar();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final cats = ref.watch(categoriesProvider);
+    final cats = ref.watch(categoriesProvider).valueOrNull ?? [];
     final active = ref.watch(categoryFilterProvider);
-    return cats.maybeWhen(
-      data: (list) => list.isEmpty
-          ? const SizedBox.shrink()
-          : SizedBox(
-              height: 36,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: list.length + 1,
-                separatorBuilder: (_, _) => const SizedBox(width: 8),
-                itemBuilder: (_, i) {
-                  final label = i == 0 ? null : list[i - 1].name;
-                  final on = (i == 0 && active == null) || (label != null && active == label);
-                  return _Chip(
-                    label: label ?? '全部',
-                    active: on,
-                    onTap: () => ref.read(categoryFilterProvider.notifier).state = label,
-                  );
-                },
-              ),
-            ),
-      orElse: () => const SizedBox.shrink(),
+    final todoOn = ref.watch(todoFilterProvider);
+    final n = cats.length + 2; // 待办 + 全部 + 分类
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: n,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          if (i == 0) {
+            return _Chip(
+              label: '待办',
+              active: todoOn,
+              icon: Icons.check_box_outline_blank_rounded,
+              onTap: () {
+                final next = !todoOn;
+                ref.read(todoFilterProvider.notifier).state = next;
+                if (next) ref.read(categoryFilterProvider.notifier).state = null;
+              },
+            );
+          }
+          final label = i == 1 ? null : cats[i - 2].name;
+          final on = !todoOn && ((i == 1 && active == null) || (label != null && active == label));
+          return _Chip(
+            label: label ?? '全部',
+            active: on,
+            onTap: () {
+              ref.read(categoryFilterProvider.notifier).state = label;
+              if (label != null) ref.read(todoFilterProvider.notifier).state = false;
+            },
+          );
+        },
+      ),
     );
   }
 }
 
 class _Chip extends ConsumerWidget {
-  const _Chip({required this.label, required this.active, required this.onTap});
+  const _Chip({required this.label, required this.active, required this.onTap, this.icon});
 
   final String label;
   final bool active;
   final VoidCallback onTap;
+  final IconData? icon;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -109,13 +123,22 @@ class _Chip extends ConsumerWidget {
         preference: ref.watch(glassPrefProvider),
         borderRadius: BorderRadius.circular(999),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: active ? FontWeight.w600 : FontWeight.w400,
-            color: active ? activeColor : (dark ? Colors.white60 : Colors.black54),
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 13, color: active ? activeColor : (dark ? Colors.white60 : Colors.black54)),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: active ? FontWeight.w600 : FontWeight.w400,
+                color: active ? activeColor : (dark ? Colors.white60 : Colors.black54),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -129,13 +152,19 @@ class _FlowList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 分类筛选：null=全部（筛选时隐藏置顶区，避免跨分类混淆）
+    // 分类筛选：null=全部（筛选时隐藏置顶区，避免跨分类混淆）；待办筛选优先于分类
     final filter = ref.watch(categoryFilterProvider);
-    final visible = filter == null
-        ? memos.items
-        : memos.items.where((m) => (m.category ?? '') == filter).toList();
-    final pinned = filter == null ? visible.where((m) => m.pinned).toList() : <Memo>[];
-    final rest = filter == null ? visible.where((m) => !m.pinned).toList() : visible;
+    final todo = ref.watch(todoFilterProvider);
+    final List<Memo> visible;
+    if (todo) {
+      visible = memos.items.where((m) => countUnchecked(m.content) > 0).toList();
+    } else if (filter == null) {
+      visible = memos.items;
+    } else {
+      visible = memos.items.where((m) => (m.category ?? '') == filter).toList();
+    }
+    final pinned = !todo && filter == null ? visible.where((m) => m.pinned).toList() : <Memo>[];
+    final rest = !todo && filter == null ? visible.where((m) => !m.pinned).toList() : visible;
 
     // 按天分组（rest 按创建时间倒序，由 provider 保证）
     final groups = <String, List<Memo>>{};

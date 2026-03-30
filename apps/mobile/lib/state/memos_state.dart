@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../conn/client.dart';
 import '../conn/models.dart';
+import '../util/checklist.dart';
 import 'conn_state.dart' show ConnState, ConnStatus, connProvider, sharedPrefsProvider;
 
 class MemosState {
@@ -214,9 +215,19 @@ final statsProvider = FutureProvider<StatsOverview>((ref) async {
   return client.stats();
 });
 
-/// 记录活跃度：今日新增 + 连续记录天数（F12）
-/// 取最近 500 条按「天」聚合；连续天数从今天（或昨天）往前数有记录的天。
-final streakProvider = FutureProvider<({int today, int streak})>((ref) async {
+/// 记录活跃度：今日新增 + 连续记录天数 + 未完成待办（F12 / 轻量待办）
+final todoFilterProvider = StateProvider<bool>((ref) => false);
+
+class ActivityStats {
+  const ActivityStats({required this.today, required this.streak, required this.todos});
+
+  final int today;
+  final int streak;
+  final int todos;
+}
+
+/// 取最近 500 条聚合；连续天数从今天（或昨天）往前数有记录的天。
+final streakProvider = FutureProvider<ActivityStats>((ref) async {
   ref.watch(memosProvider.select((s) => s.lastSyncAt));
   final client = ref.watch(connProvider).client;
   if (client == null) throw const BmApiException(0, '离线');
@@ -225,12 +236,14 @@ final streakProvider = FutureProvider<({int today, int streak})>((ref) async {
   final today = DateTime(now.year, now.month, now.day);
   final days = <DateTime>{};
   var todayCount = 0;
+  var todos = 0;
   for (final m in memos) {
     final dt = DateTime.tryParse(m.createdAt);
     if (dt == null) continue;
     final d = DateTime(dt.year, dt.month, dt.day);
     days.add(d);
     if (d == today) todayCount++;
+    todos += countUnchecked(m.content);
   }
   var streak = 0;
   var cursor = days.contains(today) ? today : today.subtract(const Duration(days: 1));
@@ -238,5 +251,5 @@ final streakProvider = FutureProvider<({int today, int streak})>((ref) async {
     streak++;
     cursor = cursor.subtract(const Duration(days: 1));
   }
-  return (today: todayCount, streak: streak);
+  return ActivityStats(today: todayCount, streak: streak, todos: todos);
 });

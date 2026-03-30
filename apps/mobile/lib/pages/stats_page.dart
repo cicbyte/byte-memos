@@ -17,7 +17,7 @@ class StatsPage extends ConsumerWidget {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
     final stats = ref.watch(statsProvider);
-    final streak = ref.watch(streakProvider).valueOrNull ?? (today: 0, streak: 0);
+    final act = ref.watch(streakProvider).valueOrNull ?? const ActivityStats(today: 0, streak: 0, todos: 0);
     final tags = ref.watch(tagsProvider).valueOrNull ?? [];
     final online = ref.watch(connProvider).isOnline;
 
@@ -51,7 +51,7 @@ class StatsPage extends ConsumerWidget {
               ],
             ),
           ),
-          // 数字拼贴 2×3（F12：+今日/连续天数）
+          // 数字拼贴 2×4（F12 + 轻量待办）
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -62,10 +62,12 @@ class StatsPage extends ConsumerWidget {
             children: [
               _StatCard(icon: Icons.note_rounded, color: kPrimary, label: '备忘录', value: '${s.memoCount}', fg: fg),
               _StatCard(icon: Icons.tag_rounded, color: kAccent, label: '标签', value: '${s.tagCount}', fg: fg),
-              _StatCard(icon: Icons.today_rounded, color: const Color(0xFF0EA5E9), label: '今日新增', value: '${streak.today}', fg: fg),
-              _StatCard(icon: Icons.local_fire_department_rounded, color: const Color(0xFFF59E0B), label: '连续记录', value: '${streak.streak} 天', fg: fg),
+              _StatCard(icon: Icons.today_rounded, color: const Color(0xFF0EA5E9), label: '今日新增', value: '${act.today}', fg: fg),
+              _StatCard(icon: Icons.local_fire_department_rounded, color: const Color(0xFFF59E0B), label: '连续记录', value: '${act.streak} 天', fg: fg),
+              _StatCard(icon: Icons.check_box_outline_blank_rounded, color: kPrimary, label: '未完成待办', value: '${act.todos}', fg: fg),
               _StatCard(icon: Icons.push_pin_rounded, color: const Color(0xFFF59E0B), label: '置顶', value: '${s.pinnedCount}', fg: fg),
               _StatCard(icon: Icons.delete_rounded, color: const Color(0xFFFF4444), label: '回收站', value: '${s.trashedCount}', fg: fg),
+              _StatCard(icon: Icons.folder_rounded, color: kAccent, label: '分类', value: '${s.categoryCount}', fg: fg),
             ],
           ),
           const SizedBox(height: 20),

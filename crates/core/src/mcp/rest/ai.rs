@@ -128,10 +128,10 @@ pub(super) async fn ai_chat_stream(
     let cancel_for_task = cancel.clone();
 
     tokio::spawn(async move {
+        // 注意：发送端必须唯一（闭包独占）。clone 留原件会让通道永不关闭 → done 发不出。
         let (delta_tx, mut delta_rx) = mpsc::unbounded_channel::<(String, String)>();
-        let sender = delta_tx.clone();
         let mut on_delta = move |text: &str, thinking: &str| {
-            let _ = sender.send((text.to_string(), thinking.to_string()));
+            let _ = delta_tx.send((text.to_string(), thinking.to_string()));
         };
         let cfg2 = cfg.clone();
         let system2 = system.clone();

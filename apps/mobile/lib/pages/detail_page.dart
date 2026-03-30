@@ -1,6 +1,7 @@
-/// 详情页：全文 Markdown 渲染 + 附件图片查看 + 编辑/置顶/删除（可撤回）/分享出去
+/// 详情页：全文 Markdown 渲染 + 交互勾选 + AI 抽待办 + 附件图片查看 + 编辑/置顶/删除（可撤回）/分享出去
 library;
 
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,7 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
+import '../util/checklist.dart';
 import 'edit_sheet.dart';
 
 class DetailPage extends ConsumerStatefulWidget {
@@ -184,6 +186,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                             switch (v) {
                               case 'edit':
                                 showEditSheet(context, ref, memo: m);
+                              case 'todo':
+                                _aiExtract(m);
                               case 'share':
                                 _shareOut();
                               case 'delete':
@@ -192,6 +196,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                           },
                           itemBuilder: (_) => [
                             const PopupMenuItem(value: 'edit', child: Text('编辑', style: TextStyle(fontSize: 14))),
+                            const PopupMenuItem(value: 'todo', child: Text('AI 抽待办', style: TextStyle(fontSize: 14))),
                             const PopupMenuItem(value: 'share', child: Text('分享出去', style: TextStyle(fontSize: 14))),
                             const PopupMenuItem(
                               value: 'delete',
@@ -262,7 +267,7 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                       ),
                     ),
 
-                    // 正文（实体垫底卡片：可读性红线）
+                    // 正文（实体垫底卡片：可读性红线；勾选框可点按写回）
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 36),
                       sliver: SliverToBoxAdapter(
@@ -271,11 +276,22 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                           preference: ref.watch(glassPrefProvider),
                           borderRadius: BorderRadius.circular(20),
                           padding: const EdgeInsets.all(16),
-                          child: MarkdownBody(
-                            data: m.content,
-                            selectable: true,
-                            styleSheet: _mdStyle(context, fg),
-                          ),
+                          child: Builder(builder: (context) {
+                            // checkboxBuilder 只给 bool：按构建顺序自计数定位第 n 个框
+                            final order = _CheckboxOrder();
+                            return MarkdownBody(
+                              data: m.content,
+                              selectable: true,
+                              styleSheet: _mdStyle(context, fg),
+                              checkboxBuilder: (checked) => _tapCheckbox(
+                                context,
+                                m,
+                                fg,
+                                checked,
+                                order.next(),
+                              ),
+                            );
+                          }),
                         ),
                       ),
                     ),
@@ -294,6 +310,84 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     } catch (_) {
       return [];
     }
+  }
+
+  /// AI 抽待办：把备忘里的行动项抽成勾选清单，确认后追加「## 待办」段 + #待办 标签
+  Future<void> _aiExtract(Memo m) async {
+    final client = ref.read(connProvider).client;
+    if (client == null) {
+      _toast('离线状态不可用');
+      return;
+    }
+    final buf = ValueNotifier<String>('');
+    final done = ValueNotifier<bool>(false);
+    final err = ValueNotifier<String?>(null);
+    unawaited(
+      client
+          .aiChatStream(
+        [
+          {'role': 'user', 'content': m.content},
+        ],
+        system: '从下面的备忘内容里抽取可执行的行动项（待办）。'
+            '只输出 Markdown 任务列表（每行一个「- [ ] 事项」），不要标题、不要解释、不要代码块围栏。'
+            '没有行动项就只输出「- [ ] （未发现行动项）」。内容：\n\n${m.content}',
+        onEvent: (event, data) {
+          if (event == 'delta') buf.value += data['text'] as String? ?? '';
+          if (event == 'error') err.value = data['message'] as String? ?? 'AI 出错';
+        },
+      )
+          .whenComplete(() => done.value = true),
+    );
+
+    if (!mounted) return;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _AiTodoSheet(buf: buf, done: done, err: err, fg: fg, onConfirm: (list) async {
+        Navigator.pop(ctx);
+        final tags = {...m.tags, '待办'}.toList();
+        final updated = await client.updateMemo(
+          m.shortId,
+          content: appendChecklist(m.content, list),
+          tags: tags,
+        );
+        ref.read(memosProvider.notifier).upsert(updated);
+      }),
+    );
+  }
+
+  /// 勾选框渲染 + 点按写回（n = 文档顺序第几个框）
+  Widget _tapCheckbox(BuildContext context, Memo m, Color fg, bool checked, int n) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () async {
+        final client = ref.read(connProvider).client;
+        if (client == null) return;
+        final next = toggleCheckbox(m.content, n);
+        if (next == m.content) return;
+        try {
+          final updated = await client.updateMemo(m.shortId, content: next);
+          ref.read(memosProvider.notifier).upsert(updated);
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(this.context).showSnackBar(
+              const SnackBar(content: Text('勾选未保存（连接不可用？）'), duration: Duration(seconds: 2)),
+            );
+          }
+        }
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        child: Icon(
+          checked ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded,
+          size: 17,
+          color: checked ? kPrimary : fg.withValues(alpha: 0.55),
+        ),
+      ),
+    );
   }
 
   MarkdownStyleSheet _mdStyle(BuildContext context, Color fg) {
@@ -315,6 +409,108 @@ class _DetailPageState extends ConsumerState<DetailPage> {
   String _fmtTime(String iso) {
     final dt = DateTime.tryParse(iso);
     return dt == null ? '' : '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+/// 勾选框构建顺序计数器（MarkdownBody 每次构建文档序遍历，与源文行序一致）
+class _CheckboxOrder {
+  int _n = 0;
+  int next() => _n++;
+}
+
+/// AI 抽待办弹层：流式预览 → 确认追加
+class _AiTodoSheet extends StatelessWidget {
+  const _AiTodoSheet({
+    required this.buf,
+    required this.done,
+    required this.err,
+    required this.fg,
+    required this.onConfirm,
+  });
+
+  final ValueNotifier<String> buf;
+  final ValueNotifier<bool> done;
+  final ValueNotifier<String?> err;
+  final Color fg;
+  final Future<void> Function(String list) onConfirm;
+
+  /// 剥掉模型偶尔加的代码块围栏
+  static String _stripFences(String s) {
+    var t = s.trim();
+    if (t.startsWith('```')) {
+      t = t.replaceFirst(RegExp(r'^```[a-zA-Z]*\n'), '');
+      if (t.endsWith('```')) t = t.substring(0, t.length - 3);
+    }
+    return t.trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassContainer(
+      tier: GlassTier.thick,
+      preference: GlassPreference.auto,
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+      padding: const EdgeInsets.all(20),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('AI 抽待办', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: fg)),
+            const SizedBox(height: 4),
+            Text('确认后追加到「## 待办」段并加 #待办 标签', style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
+            const SizedBox(height: 14),
+            Flexible(
+              child: AnimatedBuilder(
+                animation: Listenable.merge([buf, done, err]),
+                builder: (context, _) {
+                  final list = _stripFences(buf.value);
+                  final finished = done.value;
+                  final error = err.value;
+                  if (error != null) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Text('生成失败：$error', style: const TextStyle(fontSize: 12.5, color: Color(0xFFFF6B6B))),
+                    );
+                  }
+                  if (!finished && list.isEmpty) {
+                    return const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 18),
+                      child: Center(child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))),
+                    );
+                  }
+                  return SingleChildScrollView(
+                    child: Text(
+                      list.isEmpty ? '（无输出）' : '$list${finished ? '' : ' ▌'}',
+                      style: TextStyle(fontSize: 13, height: 1.7, color: fg),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 14),
+            ValueListenableBuilder<bool>(
+              valueListenable: done,
+              builder: (context, finished, _) => Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('取消')),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    style: FilledButton.styleFrom(backgroundColor: kPrimary, foregroundColor: Colors.white),
+                    onPressed: finished && err.value == null && buf.value.trim().isNotEmpty
+                        ? () => onConfirm(_stripFences(buf.value))
+                        : null,
+                    child: Text(finished ? '追加到备忘' : '生成中…'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

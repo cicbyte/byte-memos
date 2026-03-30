@@ -203,6 +203,7 @@ class BmClient {
     List<Map<String, String>> messages, {
     int? providerId,
     String? model,
+    String? system,
     void Function(String event, Map<String, dynamic> data)? onEvent,
     CancelToken? cancelToken,
   }) async {
@@ -213,6 +214,7 @@ class BmClient {
           'messages': messages,
           'provider_id': providerId,
           'model': model,
+          'system': system,
         },
         options: Options(
           responseType: ResponseType.stream,
