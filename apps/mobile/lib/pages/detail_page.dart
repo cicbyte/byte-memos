@@ -115,8 +115,12 @@ class _DetailPageState extends ConsumerState<DetailPage> {
   void _shareOut() {
     final m = _memo;
     if (m == null) return;
-    // 系统分享：纯文本（标题 + 正文）
-    final text = m.title.isEmpty ? m.content : '${m.title}\n\n${m.content}';
+    // 系统分享：标题 + 正文；公开备忘附带链接（/m/{id} 公开落地页）
+    var text = m.title.isEmpty ? m.content : '${m.title}\n\n${m.content}';
+    if (m.visibility == 'PUBLIC') {
+      final client = ref.read(connProvider).client;
+      if (client != null) text = '$text\n\n${client.origin}/m/${m.shortId}';
+    }
     Share.share(text);
   }
 

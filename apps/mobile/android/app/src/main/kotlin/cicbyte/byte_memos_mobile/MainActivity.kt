@@ -10,8 +10,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val channelName = "byte_memos/share"
 
-    /// 分享进来的文字（冷启动时 Flutter 尚未就绪，先暂存）
-    private var pendingShareText: String? = null
+    /// 分享进来的文字（冷启动时 Flutter 尚未就绪，先暂存；subject+text）
+    private var pendingShareText: Map<String, Any>? = null
 
     /// 分享进来的图片（冷启动暂存：mime + base64 内容）
     private var pendingShareImage: Map<String, Any>? = null
@@ -47,8 +47,8 @@ class MainActivity : FlutterActivity() {
         intent.takeShareImage(this)?.let(sendShareImage)
     }
 
-    private val sendShareText: (String) -> Unit = { text ->
-        channel?.invokeMethod("shareText", text)
+    private val sendShareText: (Map<String, Any>) -> Unit = { payload ->
+        channel?.invokeMethod("shareText", payload)
     }
 
     private val sendShareImage: (Map<String, Any>) -> Unit = { payload ->
@@ -64,13 +64,14 @@ class MainActivity : FlutterActivity() {
     }
 }
 
-/// 从 ACTION_SEND intent 提取 EXTRA_TEXT（仅 text/plain）
-private fun Intent.takeShareText(): String? =
-    if (action == Intent.ACTION_SEND && type == "text/plain") {
-        getStringExtra(Intent.EXTRA_TEXT)
-    } else {
-        null
-    }
+/// 从 ACTION_SEND intent 提取标题 + 正文（text/plain；浏览器分享文章常带 subject）
+private fun Intent.takeShareText(): Map<String, Any>? {
+    if (action != Intent.ACTION_SEND || type != "text/plain") return null
+    val text = getStringExtra(Intent.EXTRA_TEXT)?.trim()
+    if (text.isNullOrEmpty()) return null
+    val subject = getStringExtra(Intent.EXTRA_SUBJECT)?.trim().orEmpty()
+    return mapOf("subject" to subject, "text" to text)
+}
 
 /// 从 ACTION_SEND intent 提取图片流（image/*，F14）
 /// 读成 base64 一次性传给 Dart（附件场景量级可控，避免临时文件）

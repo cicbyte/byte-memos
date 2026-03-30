@@ -16,7 +16,7 @@ import '../state/conn_state.dart';
 import '../state/memos_state.dart';
 import '../pages/edit_sheet.dart' show showEditSheet;
 
-typedef ShareTextHandler = void Function(String text);
+typedef ShareTextHandler = void Function(String text, String subject);
 typedef ShareImageHandler = void Function(SharedImage image);
 
 /// 平台层送来的图片（base64 解码后使用）
@@ -31,6 +31,15 @@ class SharedImage {
 ShareTextHandler? _textHandler;
 ShareImageHandler? _imageHandler;
 
+/// 平台文本载荷 → (text, subject)（兼容旧的纯 String 载荷）
+(String, String) _parseTextPayload(dynamic args) {
+  if (args is Map) {
+    final m = Map<String, dynamic>.from(args);
+    return (m['text'] as String? ?? '', m['subject'] as String? ?? '');
+  }
+  return (args is String ? args : '', '');
+}
+
 /// 绑定分享回调（main 启动时调用一次）
 void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage}) {
   _textHandler = onText;
@@ -38,8 +47,9 @@ void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage}) {
   const channel = MethodChannel('byte_memos/share');
   channel.setMethodCallHandler((call) async {
     switch (call.method) {
-      case 'shareText' when call.arguments is String:
-        _textHandler?.call(call.arguments as String);
+      case 'shareText':
+        final (text, subject) = _parseTextPayload(call.arguments);
+        if (text.trim().isNotEmpty) _textHandler?.call(text, subject);
       case 'shareImage' when call.arguments is Map:
         final args = Map<String, dynamic>.from(call.arguments as Map);
         final data = args['data'] as String?;
@@ -52,10 +62,11 @@ void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage}) {
         }
     }
   });
-  // 冷启动：拉取 Activity 暂存的分享内容
+  // 冷启动：拉取 Activity 暂存的分享内容（文本 payload 带 text 键，图片带 data 键）
   channel.invokeMethod<dynamic>('takePendingShare').then((v) {
-    if (v is String && v.trim().isNotEmpty) {
-      _textHandler?.call(v);
+    if (v is Map && v['data'] == null && v['text'] != null) {
+      final (text, subject) = _parseTextPayload(v);
+      if (text.trim().isNotEmpty) _textHandler?.call(text, subject);
     } else if (v is Map) {
       final args = Map<String, dynamic>.from(v);
       final data = args['data'] as String?;
@@ -66,13 +77,19 @@ void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage}) {
           bytes: const Base64Decoder().convert(data),
         ));
       }
+    } else if (v is String && v.trim().isNotEmpty) {
+      _textHandler?.call(v, '');
     }
   });
 }
 
-/// 弹出预填的编辑弹层（附来源说明行）
-void showShareSheet(BuildContext context, WidgetRef ref, String text) {
-  showEditSheet(context, ref, prefill: '$text\n\n> 来自手机分享');
+/// 弹出预填的编辑弹层：文章标题进标题框，链接/正文进内容框（附来源行）
+void showShareSheet(BuildContext context, WidgetRef ref, String text, {String subject = ''}) {
+  final isUrl = RegExp(r'^https?://\S+$').hasMatch(text.trim());
+  final content = subject.isNotEmpty && isUrl
+      ? '[${text.trim()}](${text.trim()})\n\n> 来自手机分享'
+      : '$text\n\n> 来自手机分享';
+  showEditSheet(context, ref, prefill: content, prefillTitle: subject.isNotEmpty && isUrl ? subject : null);
 }
 
 /// 图片收纳弹层（F14）：预览 + 一键存为新备忘（图片挂为附件）

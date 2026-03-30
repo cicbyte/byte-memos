@@ -39,6 +39,9 @@ class BmClient {
 
   final Dio _dio;
 
+  /// 服务器源（无 /api/v1 后缀），公开分享链接用：`$origin/m/{shortId}`
+  String get origin => _dio.options.baseUrl.replaceAll(RegExp(r'/api/v1/?$'), '');
+
   // ===== 内部：统一错误映射 =====
 
   Future<T> _guard<T>(Future<Response<T>> Function() fn) async {

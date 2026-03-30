@@ -21,20 +21,21 @@ import '../state/conn_state.dart';
 import '../state/memos_state.dart';
 
 /// 打开新建/编辑弹层（全局入口）
-void showEditSheet(BuildContext context, WidgetRef ref, {Memo? memo, String? prefill}) {
+void showEditSheet(BuildContext context, WidgetRef ref, {Memo? memo, String? prefill, String? prefillTitle}) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _EditSheet(memo: memo, prefill: prefill),
+    builder: (_) => _EditSheet(memo: memo, prefill: prefill, prefillTitle: prefillTitle),
   );
 }
 
 class _EditSheet extends ConsumerStatefulWidget {
-  const _EditSheet({this.memo, this.prefill});
+  const _EditSheet({this.memo, this.prefill, this.prefillTitle});
 
   final Memo? memo;
   final String? prefill;
+  final String? prefillTitle;
 
   @override
   ConsumerState<_EditSheet> createState() => _EditSheetState();
@@ -42,7 +43,7 @@ class _EditSheet extends ConsumerStatefulWidget {
 
 class _EditSheetState extends ConsumerState<_EditSheet> {
   late final _content = TextEditingController(text: widget.memo?.content ?? widget.prefill ?? '');
-  late final _title = TextEditingController(text: widget.memo?.title ?? '');
+  late final _title = TextEditingController(text: widget.memo?.title ?? widget.prefillTitle ?? '');
   late final _tags = TextEditingController(text: widget.memo?.tags.join(', '));
 
   String? _category;

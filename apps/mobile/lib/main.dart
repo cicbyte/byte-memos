@@ -48,14 +48,14 @@ class _HomeState extends ConsumerState<_Home> {
   @override
   void initState() {
     super.initState();
-    // 系统分享进来的文字（F06）：预填新建弹层
+    // 系统分享进来的文字（F06）：预填新建弹层（浏览器分享文章时 subject 进标题框）
     bindShareIncoming(
-      onText: (text) {
+      onText: (text, subject) {
         if (!mounted || text.trim().isEmpty) return;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
           // 延后到 shell 渲染完成再弹层
-          showShareSheet(context, ref, text);
+          showShareSheet(context, ref, text, subject: subject);
         });
       },
       // 分享进来的图片（F14）：收纳为备忘附件

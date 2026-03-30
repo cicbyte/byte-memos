@@ -22,7 +22,8 @@ mod ai;
 use std::sync::Arc;
 
 use axum::{
-    http::StatusCode,
+    extract::{Path, State as AxumState},
+    http::{header, StatusCode},
     middleware::{from_fn_with_state, Next},
     response::{IntoResponse, Json, Response},
     routing::{delete, get, post, put},
@@ -131,6 +132,66 @@ fn api_router(state: ApiState) -> Router {
         // Swagger UI + OpenAPI spec（无需认证）
         .route("/api/v1/docs", get(swagger_ui))
         .route("/api/v1/openapi.json", get(openapi_spec))
+        // 公开分享页（无需认证；仅 PUBLIC 可见，其余 404）——链接分享落地页
+        .route("/m/{id}", get(public_memo_page).with_state(state.clone()))
+}
+
+/// 公开备忘分享页：极简无依赖 HTML（内容为 Markdown 源文，pre-wrap 呈现）
+async fn public_memo_page(AxumState(state): AxumState<ApiState>, Path(id): Path<String>) -> Response {
+    let page = |title: &str, body: String, status: StatusCode| {
+        let html = format!(
+            "<!doctype html><html lang=\"zh\"><head><meta charset=\"utf-8\">\
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
+<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\
+<title>{t}</title><style>\
+:root{{color-scheme:light dark}}body{{margin:0;font:16px/1.8 -apple-system,'Segoe UI',sans-serif;\
+background:#f6f4ef;color:#1f2328;display:flex;justify-content:center;min-height:100vh}}\
+main{{max-width:680px;padding:48px 24px;width:100%;box-sizing:border-box}}\
+h1{{font-size:1.45em;margin:0 0 .4em}}\
+.meta{{font-size:.82em;color:#8a8f98;margin-bottom:2.2em}}\
+pre.content{{white-space:pre-wrap;word-break:break-word;font:inherit;margin:0}}\
+.tag{{display:inline-block;margin-right:.6em;color:#0e7a6f;font-size:.85em}}\
+footer{{margin-top:4em;font-size:.75em;color:#b0b4bb}}\
+@media(prefers-color-scheme:dark){{body{{background:#161817;color:#e6e8ee}}.meta{{color:#7d828c}}footer{{color:#565b63}}}}\
+</style></head><body><main>{body}\
+<footer>byte-memos · 公开分享</footer></main></body></html>",
+            t = html_escape(title),
+            body = body,
+        );
+        ([(header::CONTENT_TYPE, "text/html; charset=utf-8")], (status, html)).into_response()
+    };
+
+    let m = match state.svc.get_memo(&id) {
+        Ok(m) => m,
+        Err(_) => {
+            return page(
+                "404",
+                "<h1>404</h1><p class=\"meta\">备忘不存在或未公开</p>".to_string(),
+                StatusCode::NOT_FOUND,
+            )
+        }
+    };
+    if m.visibility != "PUBLIC" {
+        return page(
+            "404",
+            "<h1>404</h1><p class=\"meta\">这条备忘没有公开</p>".to_string(),
+            StatusCode::NOT_FOUND,
+        );
+    }
+    let tags = m.tags.iter().map(|t| format!("<span class=\"tag\">#{}</span>", html_escape(t))).collect::<Vec<_>>().join("");
+    let body = format!(
+        "<h1>{}</h1><p class=\"meta\">{}{}</p><pre class=\"content\">{}</pre>",
+        html_escape(&m.title),
+        html_escape(&m.created_at),
+        if tags.is_empty() { String::new() } else { format!(" · {}", tags) },
+        html_escape(&m.content),
+    );
+    page(if m.title.is_empty() { "分享的备忘" } else { &m.title }, body, StatusCode::OK)
+}
+
+/// 最小 HTML 转义（内容与标题都过这层，防注入）
+fn html_escape(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('\"', "&quot;")
 }
 
 fn build_routes() -> Router<ApiState> {
