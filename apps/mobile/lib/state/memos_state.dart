@@ -218,6 +218,36 @@ final statsProvider = FutureProvider<StatsOverview>((ref) async {
 /// 记录活跃度：今日新增 + 连续记录天数 + 未完成待办（F12 / 轻量待办）
 final todoFilterProvider = StateProvider<bool>((ref) => false);
 
+/// 流页视图形态：timeline（默认，与桌面端一致）/ card，持久化
+enum FlowViewMode { timeline, card }
+
+final flowViewModeProvider = StateNotifierProvider<FlowViewModeNotifier, FlowViewMode>((ref) {
+  return FlowViewModeNotifier(ref);
+});
+
+class FlowViewModeNotifier extends StateNotifier<FlowViewMode> {
+  FlowViewModeNotifier(this._ref) : super(FlowViewMode.timeline) {
+    _load();
+  }
+
+  final Ref _ref;
+
+  Future<void> _load() async {
+    try {
+      final prefs = await _ref.read(sharedPrefsProvider.future);
+      if (prefs.getString('bm.flow.view') == 'card') state = FlowViewMode.card;
+    } catch (_) {}
+  }
+
+  Future<void> set(FlowViewMode m) async {
+    state = m;
+    try {
+      final prefs = await _ref.read(sharedPrefsProvider.future);
+      await prefs.setString('bm.flow.view', m == FlowViewMode.card ? 'card' : 'timeline');
+    } catch (_) {}
+  }
+}
+
 class ActivityStats {
   const ActivityStats({required this.today, required this.streak, required this.todos});
 

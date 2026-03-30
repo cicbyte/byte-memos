@@ -25,9 +25,9 @@ class FlowPage extends ConsumerWidget {
 
     return Column(
       children: [
-        // 页头：标题 + 今日日期
+        // 页头：标题 + 今日日期 + 视图切换（时间轴/卡片）
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+          padding: const EdgeInsets.fromLTRB(20, 14, 12, 4),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
@@ -39,6 +39,8 @@ class FlowPage extends ConsumerWidget {
                     (memos.items.isEmpty ? '' : '${memos.items.length} 条'),
                 style: TextStyle(fontSize: 11.5, color: fg.withValues(alpha: 0.45)),
               ),
+              const Spacer(),
+              _ViewToggle(dark: dark, fg: fg),
             ],
           ),
         ),
@@ -51,7 +53,9 @@ class FlowPage extends ConsumerWidget {
               ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
               : memos.items.isEmpty
                   ? const _Empty()
-                  : _FlowList(memos: memos),
+                  : ref.watch(flowViewModeProvider) == FlowViewMode.timeline
+                      ? _TimelineList(memos: memos)
+                      : _FlowList(memos: memos),
         ),
       ],
     );
@@ -136,6 +140,238 @@ class _Chip extends ConsumerWidget {
                 fontSize: 12.5,
                 fontWeight: active ? FontWeight.w600 : FontWeight.w400,
                 color: active ? activeColor : (dark ? Colors.white60 : Colors.black54),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 视图切换（时间轴 / 卡片）
+class _ViewToggle extends ConsumerWidget {
+  const _ViewToggle({required this.dark, required this.fg});
+
+  final bool dark;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(flowViewModeProvider);
+    Widget btn(IconData icon, FlowViewMode m, String tip) => Tooltip(
+          message: tip,
+          child: GestureDetector(
+            onTap: () => ref.read(flowViewModeProvider.notifier).set(m),
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: mode == m ? kPrimary.withValues(alpha: 0.14) : Colors.transparent,
+                borderRadius: BorderRadius.circular(9),
+              ),
+              child: Icon(
+                icon,
+                size: 17,
+                color: mode == m ? kPrimary : fg.withValues(alpha: 0.4),
+              ),
+            ),
+          ),
+        );
+    return Row(
+      children: [
+        btn(Icons.view_timeline_rounded, FlowViewMode.timeline, '时间轴'),
+        const SizedBox(width: 4),
+        btn(Icons.grid_view_rounded, FlowViewMode.card, '卡片'),
+      ],
+    );
+  }
+}
+
+/// 时间轴列表（与桌面端 MemoTimeline 同形态）：按天分组纵向轨道 + 分类色圆点 + HH:mm
+class _TimelineList extends ConsumerWidget {
+  const _TimelineList({required this.memos});
+
+  final MemosState memos;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filter = ref.watch(categoryFilterProvider);
+    final todo = ref.watch(todoFilterProvider);
+    final List<Memo> visible;
+    if (todo) {
+      visible = memos.items.where((m) => countUnchecked(m.content) > 0).toList();
+    } else if (filter == null) {
+      visible = memos.items;
+    } else {
+      visible = memos.items.where((m) => (m.category ?? '') == filter).toList();
+    }
+    // 时间轴不单列置顶区：按天分组，置顶条目带图钉标（与桌面一致）
+    final groups = <String, List<Memo>>{};
+    for (final m in visible) {
+      final dt = m.created;
+      final key = dt == null ? '更早' : _dayLabel(DateTime.now().difference(dt));
+      (groups[key] ??= []).add(m);
+    }
+    if (visible.isEmpty) return const _Empty();
+
+    final cats = ref.watch(categoriesProvider).valueOrNull ?? [];
+    final catColors = {for (final c in cats) c.name: c.color};
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return RefreshIndicator(
+      onRefresh: () => ref.read(memosProvider.notifier).refresh(),
+      displacement: 20,
+      color: kPrimary,
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 190),
+        itemCount: groups.length * 2, // 每组：日期头 + 轨道容器
+        itemBuilder: (context, i) {
+          final entry = groups.entries.elementAt(i ~/ 2);
+          if (i.isOdd) {
+            return Container(
+              margin: const EdgeInsets.only(left: 14),
+              padding: const EdgeInsets.only(left: 18),
+              decoration: BoxDecoration(
+                border: Border(
+                  left: BorderSide(
+                    width: 2,
+                    color: entry.key == '今天' ? kPrimary.withValues(alpha: 0.45) : (dark ? Colors.white12 : Colors.black12),
+                  ),
+                ),
+              ),
+              child: Column(
+                children: [
+                  for (final m in entry.value)
+                    _TlEntry(
+                      memo: m,
+                      color: _parseColor(catColors[m.category]) ?? kPrimary,
+                      onTap: () => _openDetail(context, ref, m),
+                      onLongPress: () => _quickActions(context, ref, m),
+                    ),
+                ],
+              ),
+            );
+          }
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(2, 12, 0, 6),
+            child: Row(
+              children: [
+                Text(
+                  entry.key,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    fontFamily: 'serif',
+                    color: entry.key == '今天' ? kPrimary : (dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328)),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text('${entry.value.length} 条', style: TextStyle(fontSize: 10, color: Theme.of(context).hintColor)),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  static Color? _parseColor(String? hex) {
+    if (hex == null) return null;
+    final h = hex.replaceFirst('#', '');
+    if (h.length != 6) return null;
+    final v = int.tryParse('FF$h', radix: 16);
+    return v == null ? null : Color(v);
+  }
+}
+
+/// 轨道上的单条挂件：圆点（分类色/置顶描环）+ 时间 + 标题摘要
+class _TlEntry extends StatelessWidget {
+  const _TlEntry({required this.memo, required this.color, required this.onTap, required this.onLongPress});
+
+  final Memo memo;
+  final Color color;
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+
+  String get _time {
+    final dt = memo.created;
+    if (dt == null) return '';
+    return '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+
+  String get _excerpt {
+    final src = memo.title.isNotEmpty ? memo.title : memo.content;
+    return src.replaceAll(RegExp(r'[#>*_~`\-]+'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+    final bg = dark ? const Color(0xFF191C1B) : const Color(0xFFF8F6F1);
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 7),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 圆点（叠在轨道线上，bg 披光环隔开轨道）
+            Transform.translate(
+              offset: const Offset(-23.5, 5),
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: color,
+                  boxShadow: [BoxShadow(color: bg, blurRadius: 0, spreadRadius: 3)],
+                  border: memo.pinned ? Border.all(color: kPrimary.withValues(alpha: 0.5), width: 1.5) : null,
+                ),
+              ),
+            ),
+            SizedBox(
+              width: 38,
+              child: Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(_time, style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.45))),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (memo.pinned) ...[
+                        Icon(Icons.push_pin_rounded, size: 11, color: kPrimary.withValues(alpha: 0.9)),
+                        const SizedBox(width: 4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          _excerpt.isEmpty ? '（无标题）' : _excerpt,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: fg),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (memo.tags.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      memo.tags.take(4).map((t) => '#$t').join('  '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 10.5, color: kAccent.withValues(alpha: 0.9)),
+                    ),
+                  ],
+                ],
               ),
             ),
           ],
@@ -240,86 +476,86 @@ class _FlowList extends ConsumerWidget {
     );
   }
 
-  void _openDetail(BuildContext context, WidgetRef ref, Memo m) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => DetailPage(memoId: m.shortId)));
-  }
-
-  /// F11：长按快捷菜单（置顶 / 公开-私有）
-  void _quickActions(BuildContext context, WidgetRef ref, Memo m) {
-    final client = ref.read(connProvider).client;
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final isPublic = m.visibility == 'PUBLIC';
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => GlassContainer(
-        tier: GlassTier.thick,
-        preference: ref.read(glassPrefProvider),
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 14),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(left: 12, top: 8, bottom: 4),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    m.title.isEmpty ? '快捷操作' : m.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12, color: (dark ? Colors.white : Colors.black87).withValues(alpha: 0.55)),
-                  ),
-                ),
-              ),
-              ListTile(
-                leading: Icon(m.pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 20),
-                title: Text(m.pinned ? '取消置顶' : '置顶', style: const TextStyle(fontSize: 14)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    final updated = await client!.togglePinned(m.shortId);
-                    ref.read(memosProvider.notifier).upsert(updated);
-                  } catch (_) {}
-                },
-              ),
-              ListTile(
-                leading: Icon(isPublic ? Icons.lock_outline_rounded : Icons.public_rounded, size: 20),
-                title: Text(isPublic ? '设为私有' : '设为公开', style: const TextStyle(fontSize: 14)),
-                subtitle: Text(isPublic ? '仅自己可见' : '公开分享', style: const TextStyle(fontSize: 11)),
-                onTap: () async {
-                  Navigator.pop(ctx);
-                  try {
-                    final updated = await client!.updateMemo(
-                      m.shortId,
-                      visibility: isPublic ? 'PRIVATE' : 'PUBLIC',
-                    );
-                    ref.read(memosProvider.notifier).upsert(updated);
-                  } catch (_) {}
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   int _count(List<Memo> pinned, Map<String, List<Memo>> groups, MemosState memos) {
     var n = 1; // 尾部元素
     if (pinned.isNotEmpty) n += 1 + pinned.length;
     n += groups.entries.fold<int>(0, (acc, e) => acc + 1 + e.value.length);
     return n;
   }
+}
 
-  String _dayLabel(Duration diff) {
-    if (diff.inDays == 0) return '今天';
-    if (diff.inDays == 1) return '昨天';
-    if (diff.inDays < 7) return '${diff.inDays} 天前';
-    return DateFormat('M 月 d 日', 'zh').format(DateTime.now().subtract(diff));
-  }
+void _openDetail(BuildContext context, WidgetRef ref, Memo m) {
+  Navigator.of(context).push(MaterialPageRoute(builder: (_) => DetailPage(memoId: m.shortId)));
+}
+
+String _dayLabel(Duration diff) {
+  if (diff.inDays == 0) return '今天';
+  if (diff.inDays == 1) return '昨天';
+  if (diff.inDays < 7) return '${diff.inDays} 天前';
+  return DateFormat('M 月 d 日', 'zh').format(DateTime.now().subtract(diff));
+}
+
+/// F11：长按快捷菜单（置顶 / 公开-私有），时间轴与卡片视图共用
+void _quickActions(BuildContext context, WidgetRef ref, Memo m) {
+  final client = ref.read(connProvider).client;
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final isPublic = m.visibility == 'PUBLIC';
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => GlassContainer(
+      tier: GlassTier.thick,
+      preference: ref.read(glassPrefProvider),
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 14),
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 12, top: 8, bottom: 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  m.title.isEmpty ? '快捷操作' : m.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 12, color: (dark ? Colors.white : Colors.black87).withValues(alpha: 0.55)),
+                ),
+              ),
+            ),
+            ListTile(
+              leading: Icon(m.pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 20),
+              title: Text(m.pinned ? '取消置顶' : '置顶', style: const TextStyle(fontSize: 14)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  final updated = await client!.togglePinned(m.shortId);
+                  ref.read(memosProvider.notifier).upsert(updated);
+                } catch (_) {}
+              },
+            ),
+            ListTile(
+              leading: Icon(isPublic ? Icons.lock_outline_rounded : Icons.public_rounded, size: 20),
+              title: Text(isPublic ? '设为私有' : '设为公开', style: const TextStyle(fontSize: 14)),
+              subtitle: Text(isPublic ? '仅自己可见' : '公开分享', style: const TextStyle(fontSize: 11)),
+              onTap: () async {
+                Navigator.pop(ctx);
+                try {
+                  final updated = await client!.updateMemo(
+                    m.shortId,
+                    visibility: isPublic ? 'PRIVATE' : 'PUBLIC',
+                  );
+                  ref.read(memosProvider.notifier).upsert(updated);
+                } catch (_) {}
+              },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// 卡片入场：淡入 + 轻微上滑（首屏 stagger，系统 reduce-motion 时跳过）
