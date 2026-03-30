@@ -1,18 +1,16 @@
-/// 我的页：连接状态卡 + 多连接管理（增/改/删/切换/测试）+ 回收站入口 + 外观（玻璃强度/主题）
+/// 我的页：连接状态 Hero 卡 + 分组入口（工具 / 设置）· 操作进二级页
 library;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../conn/conn_store.dart';
-import '../conn/pairing.dart';
 import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
 import 'ai_chat_page.dart';
-import 'pair_scan_page.dart';
+import 'appearance_page.dart';
+import 'connections_page.dart';
 import 'trash_page.dart';
 
 class MinePage extends ConsumerWidget {
@@ -22,7 +20,6 @@ class MinePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
-    final conn = ref.watch(connProvider);
     final glassPref = ref.watch(glassPrefProvider);
     final themeMode = ref.watch(themeModeProvider);
 
@@ -30,162 +27,57 @@ class MinePage extends ConsumerWidget {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 190),
       children: [
         Text('我的', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: fg)),
-        const SizedBox(height: 14),
+        const SizedBox(height: 16),
 
-        // ===== 数据 =====
-        _SectionLabel('数据', fg),
-        _TrashEntry(fg: fg),
-        const SizedBox(height: 10),
-        _AiEntry(fg: fg),
-        const SizedBox(height: 18),
+        // ===== 连接 Hero 卡（点进连接管理） =====
+        _ConnHero(fg: fg, glassPref: glassPref),
+        const SizedBox(height: 20),
 
-        // ===== 连接 =====
-        _SectionLabel('连接', fg),
+        // ===== 工具 =====
+        _GroupLabel('工具', fg),
         const SizedBox(height: 8),
         GlassContainer(
           tier: GlassTier.flat,
           preference: glassPref,
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.all(14),
+          borderRadius: BorderRadius.circular(18),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
           child: Column(
             children: [
-              // 状态行
-              Row(
-                children: [
-                  _StatusDot(status: conn.status),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      switch (conn.status) {
-                        ConnStatus.none => '未配置连接',
-                        ConnStatus.connecting => '连接中…',
-                        ConnStatus.online => '已连接 · ${conn.activeProfile?.name ?? ''}',
-                        ConnStatus.keyError => 'API Key 不正确',
-                        ConnStatus.offline => '无法连接（服务未开？）',
-                      },
-                      style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: fg),
-                    ),
-                  ),
-                  if (conn.status != ConnStatus.none)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.refresh_rounded, size: 19),
-                      onPressed: () {
-                        final p = conn.activeProfile;
-                        if (p != null) ref.read(connProvider.notifier).probe(p);
-                      },
-                    ),
-                ],
+              _Row(
+                icon: Icons.auto_awesome_rounded,
+                tint: kPrimary,
+                title: 'AI 助手',
+                subtitle: '对话 · 流式 · 沿用桌面端模型',
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiChatPage())),
               ),
-              const SizedBox(height: 6),
-              // 配置列表
-              for (final p in conn.profiles)
-                ListTile(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    p.id == conn.activeId ? Icons.radio_button_checked_rounded : Icons.radio_button_off_rounded,
-                    size: 17,
-                    color: p.id == conn.activeId ? kPrimary : (dark ? Colors.white30 : Colors.black26),
-                  ),
-                  title: Text(
-                    '${p.name} · ${_shortUrl(p.baseUrl)}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 12.5, color: fg),
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.edit_outlined, size: 16, color: dark ? Colors.white38 : Colors.black38),
-                        onPressed: () => _showProfileForm(context, ref, existing: p),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: Icon(Icons.delete_outline_rounded, size: 17, color: Colors.redAccent.withValues(alpha: 0.7)),
-                        onPressed: () => ref.read(connProvider.notifier).remove(p.id),
-                      ),
-                    ],
-                  ),
-                  onTap: () => ref.read(connProvider.notifier).activate(p.id),
-                ),
-              // 新增
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => _showProfileForm(context, ref),
-                  icon: const Icon(Icons.add_rounded, size: 17),
-                  label: const Text('添加连接', style: TextStyle(fontSize: 12.5)),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '在桌面端「REST API 服务」页启动服务后，这里填它的地址（默认端口 8318）。同一 Wi-Fi 用电脑局域网 IP；模拟器联调用 adb reverse 后填 127.0.0.1。',
-                style: TextStyle(fontSize: 11, height: 1.6, color: fg.withValues(alpha: 0.5)),
-              ),
+              _Divider(fg: fg),
+              const _TrashRow(),
             ],
           ),
         ),
-
         const SizedBox(height: 20),
 
-        // ===== 外观 =====
-        _SectionLabel('外观', fg),
+        // ===== 设置 =====
+        _GroupLabel('设置', fg),
         const SizedBox(height: 8),
         GlassContainer(
           tier: GlassTier.flat,
           preference: glassPref,
-          borderRadius: BorderRadius.circular(16),
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('玻璃强度', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: fg)),
-              const SizedBox(height: 4),
-              Text('省电：关闭所有实时模糊，保留透明度层级', style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
-              const SizedBox(height: 10),
-              SegmentedButton<GlassPreference>(
-                segments: [
-                  for (final p in GlassPreference.values) ButtonSegment(value: p, label: Text(p.label, style: const TextStyle(fontSize: 12))),
-                ],
-                selected: {glassPref},
-                onSelectionChanged: (s) => ref.read(glassPrefProvider.notifier).set(s.first),
-                showSelectedIcon: false,
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected) ? kPrimary.withValues(alpha: 0.85) : null),
-                  foregroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected) ? Colors.white : fg.withValues(alpha: 0.6)),
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text('主题', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: fg)),
-              const SizedBox(height: 10),
-              SegmentedButton<ThemeMode>(
-                segments: const [
-                  ButtonSegment(value: ThemeMode.system, label: Text('跟随系统', style: TextStyle(fontSize: 12))),
-                  ButtonSegment(value: ThemeMode.light, label: Text('浅色', style: TextStyle(fontSize: 12))),
-                  ButtonSegment(value: ThemeMode.dark, label: Text('深色', style: TextStyle(fontSize: 12))),
-                ],
-                selected: {themeMode},
-                onSelectionChanged: (s) => ref.read(themeModeProvider.notifier).set(s.first),
-                showSelectedIcon: false,
-                style: ButtonStyle(
-                  visualDensity: VisualDensity.compact,
-                  backgroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected) ? kPrimary.withValues(alpha: 0.85) : null),
-                  foregroundColor: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.selected) ? Colors.white : fg.withValues(alpha: 0.6)),
-                ),
-              ),
-            ],
+          borderRadius: BorderRadius.circular(18),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: _Row(
+            icon: Icons.palette_outlined,
+            tint: kAccent,
+            title: '外观',
+            subtitle: '玻璃 ${glassPref.label} · 主题 ${switch (themeMode) {
+              ThemeMode.system => '跟随系统',
+              ThemeMode.light => '浅色',
+              ThemeMode.dark => '深色',
+            }}',
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AppearancePage())),
           ),
         ),
-
-        const SizedBox(height: 20),
+        const SizedBox(height: 24),
         Center(
           child: Text(
             'byte-memos mobile v0.1.0 · 液态玻璃设计',
@@ -195,157 +87,11 @@ class MinePage extends ConsumerWidget {
       ],
     );
   }
-
-  String _shortUrl(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
-
-  void _showProfileForm(BuildContext context, WidgetRef ref, {ConnProfile? existing}) {
-    final name = TextEditingController(text: existing?.name ?? '');
-    final url = TextEditingController(text: existing?.baseUrl ?? 'http://');
-    final key = TextEditingController(text: existing?.apiKey ?? '');
-    final dark = Theme.of(context).brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
-        child: GlassContainer(
-          tier: GlassTier.thick,
-          preference: ref.read(glassPrefProvider),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(existing == null ? '添加连接' : '编辑连接',
-                  style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w700, color: dark ? Colors.white : Colors.black87)),
-              const SizedBox(height: 14),
-
-              // 快捷配对：扫码 / 剪贴板（仅新增时）
-              if (existing == null) ...[
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: dark ? Colors.white : kPrimary,
-                          side: BorderSide(color: dark ? Colors.white24 : kPrimary.withValues(alpha: 0.5)),
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                        ),
-                        onPressed: () async {
-                          final payload = await Navigator.of(ctx).push<PairingPayload>(
-                            MaterialPageRoute(builder: (_) => const PairScanPage()),
-                          );
-                          if (payload != null) {
-                            name.text = payload.name;
-                            url.text = payload.baseUrl;
-                            key.text = payload.apiKey;
-                          }
-                        },
-                        icon: const Icon(Icons.qr_code_scanner_rounded, size: 17),
-                        label: const Text('扫码配对', style: TextStyle(fontSize: 12.5)),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: dark ? Colors.white : kPrimary,
-                          side: BorderSide(color: dark ? Colors.white24 : kPrimary.withValues(alpha: 0.5)),
-                          padding: const EdgeInsets.symmetric(vertical: 9),
-                        ),
-                        onPressed: () async {
-                          final data = await Clipboard.getData('text/plain');
-                          if (!ctx.mounted) return;
-                          final payload = data?.text == null ? null : parsePairing(data!.text!);
-                          if (payload == null) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              const SnackBar(content: Text('剪贴板没有配对串（在桌面端复制后重试）')),
-                            );
-                            return;
-                          }
-                          name.text = payload.name;
-                          url.text = payload.baseUrl;
-                          key.text = payload.apiKey;
-                        },
-                        icon: const Icon(Icons.content_paste_rounded, size: 17),
-                        label: const Text('从剪贴板配对', style: TextStyle(fontSize: 12.5)),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-              ],
-
-              _field(ctx, name, '名称（如：家里台式机）', dark),
-              const SizedBox(height: 10),
-              _field(ctx, url, 'http://192.168.1.10:8318', dark),
-              const SizedBox(height: 10),
-              _field(ctx, key, 'API Key（开「本机免 Key」可留空）', dark, obscure: true),
-              const SizedBox(height: 16),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    style: FilledButton.styleFrom(
-                      backgroundColor: kPrimary,
-                      foregroundColor: Colors.white,
-                    ),
-                    onPressed: () {
-                      final u = url.text.trim().replaceAll(RegExp(r'/+$'), '');
-                      if (!RegExp(r'^https?://.+:\\d+$|^https?://.+$').hasMatch(u)) {
-                        ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(content: Text('地址不合法，需以 http(s):// 开头')));
-                        return;
-                      }
-                      final p = ConnProfile(
-                        id: existing?.id ?? DateTime.now().microsecondsSinceEpoch.toString(),
-                        name: name.text.trim().isEmpty ? '连接' : name.text.trim(),
-                        baseUrl: u,
-                        apiKey: key.text.trim(),
-                      );
-                      Navigator.pop(ctx);
-                      ref.read(connProvider.notifier).saveAndActivate(p);
-                    },
-                    child: const Text('保存并测试'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _field(BuildContext ctx, TextEditingController c, String hint, bool dark, {bool obscure = false}) {
-    return TextField(
-      controller: c,
-      obscureText: obscure,
-      style: TextStyle(fontSize: 13, color: dark ? Colors.white : Colors.black87),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(fontSize: 12.5, color: dark ? Colors.white38 : Colors.black38),
-        isDense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: dark ? Colors.white24 : Colors.black12),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(10),
-          borderSide: BorderSide(color: dark ? Colors.white24 : Colors.black12),
-        ),
-      ),
-    );
-  }
 }
 
-class _SectionLabel extends StatelessWidget {
-  const _SectionLabel(this.text, this.fg);
+/// 分组标签
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel(this.text, this.fg);
 
   final String text;
   final Color fg;
@@ -359,88 +105,181 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-/// AI 助手入口（D3）
-class _AiEntry extends StatelessWidget {
-  const _AiEntry({required this.fg});
+/// 连接状态 Hero 卡：状态点 + 当前主机 + 地址，整卡进连接管理
+class _ConnHero extends ConsumerWidget {
+  const _ConnHero({required this.fg, required this.glassPref});
 
   final Color fg;
+  final GlassPreference glassPref;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final conn = ref.watch(connProvider);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final statusText = switch (conn.status) {
+      ConnStatus.none => '未配置连接',
+      ConnStatus.connecting => '连接中…',
+      ConnStatus.online => '已连接',
+      ConnStatus.keyError => 'API Key 不正确',
+      ConnStatus.offline => '无法连接',
+    };
+    final active = conn.activeProfile;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConnectionsPage())),
+      child: GlassContainer(
+        tier: GlassTier.regular,
+        preference: glassPref,
+        borderRadius: BorderRadius.circular(18),
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            // 主机头像圆
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: LinearGradient(colors: [kPrimary.withValues(alpha: 0.35), kAccent.withValues(alpha: 0.35)]),
+              ),
+              child: Icon(
+                conn.status == ConnStatus.online ? Icons.computer_rounded : Icons.computer_outlined,
+                size: 21,
+                color: conn.status == ConnStatus.online ? kPrimary : fg.withValues(alpha: 0.6),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _StatusDot(status: conn.status),
+                      const SizedBox(width: 6),
+                      Text(
+                        active == null ? statusText : '$statusText · ${active.name}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: fg),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    active == null ? '点此扫码或手填，连上桌面端' : _shortUrl(active.baseUrl),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11.5, color: fg.withValues(alpha: 0.5)),
+                  ),
+                ],
+              ),
+            ),
+            if (conn.status != ConnStatus.none)
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.refresh_rounded, size: 19, color: dark ? Colors.white54 : Colors.black45),
+                onPressed: () {
+                  final p = conn.activeProfile;
+                  if (p != null) ref.read(connProvider.notifier).probe(p);
+                },
+              ),
+            Icon(Icons.chevron_right_rounded, size: 22, color: fg.withValues(alpha: 0.35)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  static String _shortUrl(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
+}
+
+/// 统一设置行：圆角渐变图标 + 标题 + 摘要 + chevron
+class _Row extends StatelessWidget {
+  const _Row({
+    required this.icon,
+    required this.tint,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.trailing,
+  });
+
+  final IconData icon;
+  final Color tint;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
-      tier: GlassTier.flat,
-      preference: GlassPreference.auto,
-      borderRadius: BorderRadius.circular(16),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-      child: ListTile(
-        contentPadding: EdgeInsets.zero,
-        leading: Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            gradient: LinearGradient(colors: [kPrimary.withValues(alpha: 0.3), kAccent.withValues(alpha: 0.3)]),
-          ),
-          child: Icon(Icons.auto_awesome_rounded, size: 17, color: kPrimary),
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+      visualDensity: VisualDensity.comfortable,
+      leading: Container(
+        width: 34,
+        height: 34,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          gradient: LinearGradient(colors: [tint.withValues(alpha: 0.3), tint.withValues(alpha: 0.12)]),
         ),
-        title: Text('AI 助手', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
-        subtitle: Text('对话 · 流式 · 沿用桌面端模型', style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
-        trailing: Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiChatPage())),
+        child: Icon(icon, size: 17, color: tint),
       ),
+      title: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
+      subtitle: subtitle.isEmpty ? null : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
+      trailing: trailing ?? Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
+      onTap: onTap,
     );
   }
 }
 
-/// 回收站入口：flat 玻璃行 + 数量角标
-class _TrashEntry extends ConsumerWidget {
-  const _TrashEntry({required this.fg});
+/// 组内分隔线
+class _Divider extends StatelessWidget {
+  const _Divider({required this.fg});
 
   final Color fg;
 
   @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(left: 60),
+        child: Container(height: 0.5, color: fg.withValues(alpha: 0.08)),
+      );
+}
+
+/// 回收站行（带数量角标）
+class _TrashRow extends ConsumerWidget {
+  const _TrashRow();
+
+  @override
   Widget build(BuildContext context, WidgetRef ref) {
     final dark = Theme.of(context).brightness == Brightness.dark;
-    final trashed = ref.watch(statsProvider).maybeWhen(
-          data: (s) => s.trashedCount,
-          orElse: () => 0,
-        );
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrashPage())),
-        child: GlassContainer(
-          tier: GlassTier.flat,
-          preference: ref.watch(glassPrefProvider),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
-          child: Row(
-            children: [
-              Icon(Icons.delete_outline_rounded, size: 19, color: fg.withValues(alpha: 0.7)),
-              const SizedBox(width: 10),
-              Text('回收站', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: fg)),
-              const Spacer(),
-              if (trashed > 0)
-                GlassContainer(
-                  tier: GlassTier.regular,
-                  preference: ref.watch(glassPrefProvider),
-                  borderRadius: BorderRadius.circular(999),
-                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 2),
-                  child: Text(
-                    '$trashed',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                      color: dark ? Colors.white : kPrimary,
-                    ),
-                  ),
-                ),
-              const SizedBox(width: 4),
-              Icon(Icons.chevron_right_rounded, size: 18, color: fg.withValues(alpha: 0.35)),
-            ],
-          ),
-        ),
+    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+    final trashed = ref.watch(statsProvider).maybeWhen(data: (s) => s.trashedCount, orElse: () => 0);
+    return _Row(
+      icon: Icons.delete_outline_rounded,
+      tint: fg.withValues(alpha: 0.55),
+      title: '回收站',
+      subtitle: trashed > 0 ? '$trashed 条待恢复' : '空',
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (trashed > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: kPrimary.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('$trashed', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: dark ? Colors.white : kPrimary)),
+            ),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
+        ],
       ),
+      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrashPage())),
     );
   }
 }
@@ -460,8 +299,8 @@ class _StatusDot extends StatelessWidget {
       ConnStatus.none => (const Color(0xFF9CA3AF), false),
     };
     return Container(
-      width: 9,
-      height: 9,
+      width: 8,
+      height: 8,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: color,
