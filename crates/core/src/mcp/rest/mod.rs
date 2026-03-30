@@ -15,6 +15,7 @@ mod docs;
 mod state;
 mod stats;
 mod trash;
+mod attachments;
 
 use std::sync::Arc;
 
@@ -39,6 +40,7 @@ use categories::{create_category, delete_category, list_categories, rename_categ
 use docs::{openapi_spec, swagger_ui};
 use stats::{stats_overview, tag_stats};
 use trash::{empty_trash, list_trashed, purge_item, restore_item};
+use attachments::{delete_attachment_rest, download_attachment, list_attachments, upload_attachment};
 
 // ============ 启动函数 ============
 
@@ -134,6 +136,9 @@ fn build_routes() -> Router<ApiState> {
         .route("/memos/{id}", get(get_memo).put(update_memo).delete(remove_memo))
         .route("/memos/{id}/toggle-pinned", post(toggle_memo_pinned))
         .route("/memos/{id}/visibility", post(set_memo_visibility))
+        // 附件（D2：移动端图片收纳）
+        .route("/memos/{id}/attachments", get(list_attachments).post(upload_attachment))
+        .route("/attachments/{att_id}", get(download_attachment).delete(delete_attachment_rest))
         // 分类
         .route("/categories", get(list_categories).post(create_category))
         .route("/categories/{id}", put(rename_category).delete(delete_category))

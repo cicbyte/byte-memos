@@ -49,14 +49,24 @@ class _HomeState extends ConsumerState<_Home> {
   void initState() {
     super.initState();
     // 系统分享进来的文字（F06）：预填新建弹层
-    bindShareIncoming((text) {
-      if (!mounted || text.trim().isEmpty) return;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+    bindShareIncoming(
+      onText: (text) {
+        if (!mounted || text.trim().isEmpty) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          // 延后到 shell 渲染完成再弹层
+          showShareSheet(context, ref, text);
+        });
+      },
+      // 分享进来的图片（F14）：收纳为备忘附件
+      onImage: (img) {
         if (!mounted) return;
-        // 延后到 shell 渲染完成再弹层
-        showShareSheet(context, ref, text);
-      });
-    });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showImageShareSheet(context, ref, img);
+        });
+      },
+    );
   }
 
   @override

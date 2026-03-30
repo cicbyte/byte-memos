@@ -1,5 +1,7 @@
-/// 详情页：全文 Markdown 渲染 + 编辑/置顶/删除（可撤回）/分享出去
+/// 详情页：全文 Markdown 渲染 + 附件图片查看 + 编辑/置顶/删除（可撤回）/分享出去
 library;
+
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
@@ -237,6 +239,29 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                       ),
                     ),
 
+                    // 附件条（F09：图片缩略图，点击全屏）
+                    SliverToBoxAdapter(
+                      child: FutureBuilder<List<AttachmentDto>>(
+                        future: _loadAttachments(),
+                        builder: (context, snap) {
+                          final images = (snap.data ?? []).where((a) => a.isImage).toList();
+                          if (images.isEmpty) return const SizedBox.shrink();
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                            child: SizedBox(
+                              height: 86,
+                              child: ListView.separated(
+                                scrollDirection: Axis.horizontal,
+                                itemCount: images.length,
+                                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                                itemBuilder: (_, i) => _AttThumb(att: images[i]),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
                     // 正文（实体垫底卡片：可读性红线）
                     SliverPadding(
                       padding: const EdgeInsets.fromLTRB(16, 12, 16, 36),
@@ -261,6 +286,16 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     );
   }
 
+  Future<List<AttachmentDto>> _loadAttachments() async {
+    final client = ref.read(connProvider).client;
+    if (client == null) return [];
+    try {
+      return await client.listAttachments(widget.memoId);
+    } catch (_) {
+      return [];
+    }
+  }
+
   MarkdownStyleSheet _mdStyle(BuildContext context, Color fg) {
     final base = MarkdownStyleSheet.fromTheme(Theme.of(context));
     return base.copyWith(
@@ -280,5 +315,59 @@ class _DetailPageState extends ConsumerState<DetailPage> {
   String _fmtTime(String iso) {
     final dt = DateTime.tryParse(iso);
     return dt == null ? '' : '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  }
+}
+
+/// 附件缩略图（点击全屏 InteractiveViewer）
+class _AttThumb extends ConsumerWidget {
+  const _AttThumb({required this.att});
+
+  final AttachmentDto att;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<Uint8List>(
+      future: ref.read(connProvider).client?.downloadAttachment(att.id),
+      builder: (context, snap) {
+        final bytes = snap.data;
+        final thumb = bytes == null
+            ? Container(
+                width: 86,
+                height: 86,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).hintColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Center(child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))),
+              )
+            : GestureDetector(
+                onTap: () => _openViewer(context, bytes),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.memory(bytes, width: 86, height: 86, fit: BoxFit.cover),
+                ),
+              );
+        return thumb;
+      },
+    );
+  }
+
+  void _openViewer(BuildContext context, Uint8List bytes) {
+    Navigator.of(context).push(PageRouteBuilder(
+      opaque: false,
+      barrierColor: Colors.black87,
+      pageBuilder: (_, __, ___) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: GestureDetector(
+          onTap: () => Navigator.pop(context),
+          child: Center(
+            child: InteractiveViewer(
+              maxScale: 5,
+              child: Image.memory(bytes),
+            ),
+          ),
+        ),
+      ),
+    ));
   }
 }

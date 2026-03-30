@@ -4,6 +4,8 @@
 /// 所有错误统一抛 [BmApiException]，UI 层按 status 区分提示。
 library;
 
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 
 import 'models.dart';
@@ -21,7 +23,6 @@ class BmApiException implements Exception {
   @override
   String toString() => 'BmApiException($status): $message';
 }
-
 class BmClient {
   BmClient({required String baseUrl, String? apiKey})
       : _dio = Dio(
@@ -153,6 +154,38 @@ class BmClient {
   Future<List<TagStat>> tagStats() async {
     final data = await _guard(() => _dio.get<dynamic>('/tags'));
     return (data as List<dynamic>).map((e) => TagStat.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  // ===== 附件（D2） =====
+
+  Future<List<AttachmentDto>> listAttachments(String memoId) async {
+    final data = await _guard(() => _dio.get<dynamic>('/memos/$memoId/attachments'));
+    return (data as List<dynamic>).map((e) => AttachmentDto.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// 原始字节直传（Content-Type 即 MIME）
+  Future<AttachmentDto> uploadAttachment(String memoId, {required String filename, required String mimeType, required Uint8List bytes}) async {
+    final data = await _guard(() => _dio.post<dynamic>(
+          '/memos/$memoId/attachments',
+          queryParameters: {'filename': filename},
+          data: bytes,
+          options: Options(
+            headers: {
+              Headers.contentLengthHeader: bytes.length,
+              Headers.contentTypeHeader: mimeType,
+            },
+          ),
+        ));
+    return AttachmentDto.fromJson(data as Map<String, dynamic>);
+  }
+
+  /// 下载内容（带 Key 鉴权走 dio；图片用 Image.memory 呈现）
+  Future<Uint8List> downloadAttachment(int attId) async {
+    final resp = await _guard(() => _dio.get<Uint8List>(
+          '/attachments/$attId',
+          options: Options(responseType: ResponseType.bytes),
+        ));
+    return resp;
   }
 
   // ===== 回收站（删除撤回用） =====

@@ -114,6 +114,33 @@ class TagStat {
       );
 }
 
+/// 附件元数据（D2）
+class AttachmentDto {
+  const AttachmentDto({
+    required this.id,
+    required this.filename,
+    required this.fileSize,
+    required this.mimeType,
+    this.createdAt = '',
+  });
+
+  final int id;
+  final String filename;
+  final int fileSize;
+  final String mimeType;
+  final String createdAt;
+
+  bool get isImage => mimeType.startsWith('image/');
+
+  factory AttachmentDto.fromJson(Map<String, dynamic> j) => AttachmentDto(
+        id: (j['id'] as num).toInt(),
+        filename: j['filename'] as String? ?? '',
+        fileSize: (j['file_size'] as num?)?.toInt() ?? 0,
+        mimeType: j['mime_type'] as String? ?? '',
+        createdAt: j['created_at'] as String? ?? '',
+      );
+}
+
 /// 回收站条目（软删除备忘，与桌面端 TrashedItem 对齐）
 class TrashedItem {
   const TrashedItem({
