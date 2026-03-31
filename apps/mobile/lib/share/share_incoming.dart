@@ -18,6 +18,7 @@ import '../pages/edit_sheet.dart' show showEditSheet;
 
 typedef ShareTextHandler = void Function(String text, String subject);
 typedef ShareImageHandler = void Function(SharedImage image);
+typedef QuickNoteHandler = void Function();
 
 /// 平台层送来的图片（base64 解码后使用）
 class SharedImage {
@@ -30,6 +31,7 @@ class SharedImage {
 
 ShareTextHandler? _textHandler;
 ShareImageHandler? _imageHandler;
+QuickNoteHandler? _quickNoteHandler;
 
 /// 平台文本载荷 → (text, subject)（兼容旧的纯 String 载荷）
 (String, String) _parseTextPayload(dynamic args) {
@@ -41,15 +43,18 @@ ShareImageHandler? _imageHandler;
 }
 
 /// 绑定分享回调（main 启动时调用一次）
-void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage}) {
+void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage, QuickNoteHandler? onQuickNote}) {
   _textHandler = onText;
   _imageHandler = onImage;
+  _quickNoteHandler = onQuickNote;
   const channel = MethodChannel('byte_memos/share');
   channel.setMethodCallHandler((call) async {
     switch (call.method) {
       case 'shareText':
         final (text, subject) = _parseTextPayload(call.arguments);
         if (text.trim().isNotEmpty) _textHandler?.call(text, subject);
+      case 'quickNote':
+        _quickNoteHandler?.call();
       case 'shareImage' when call.arguments is Map:
         final args = Map<String, dynamic>.from(call.arguments as Map);
         final data = args['data'] as String?;
@@ -80,6 +85,10 @@ void bindShareIncoming({ShareTextHandler? onText, ShareImageHandler? onImage}) {
     } else if (v is String && v.trim().isNotEmpty) {
       _textHandler?.call(v, '');
     }
+  });
+  // 冷启动：小组件深链速记
+  channel.invokeMethod<bool>('takeQuickNote').then((v) {
+    if (v == true) _quickNoteHandler?.call();
   });
 }
 

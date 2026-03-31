@@ -19,6 +19,7 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
+import '../state/offline_queue.dart';
 
 /// 打开新建/编辑弹层（全局入口）
 void showEditSheet(BuildContext context, WidgetRef ref, {Memo? memo, String? prefill, String? prefillTitle}) {
@@ -116,13 +117,24 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
     setState(() => _saving = true);
 
     final client = ref.read(connProvider).client;
+    final tags = _tags.text.split(RegExp(r'[,，]')).map((e) => e.trim().replaceAll('#', '')).where((e) => e.isNotEmpty).toList();
+    // 离线兜底（F15）：新建入离线队列，联网自动补传；编辑已有备忘离线不支持
     if (client == null) {
-      _toast('离线状态，稍后再试');
+      if (widget.memo == null) {
+        await ref.read(offlineQueueProvider.notifier).enqueue(PendingMemo(
+              content: content,
+              title: _title.text.trim(),
+              tags: tags,
+              createdAt: DateTime.now().toIso8601String(),
+            ));
+        if (mounted) Navigator.pop(context);
+        _toast(_picks.isNotEmpty ? '离线已存（图片需联网后再加），联网自动同步' : '离线已存，联网后自动同步');
+      } else {
+        _toast('离线状态，编辑需连接桌面端');
+      }
       setState(() => _saving = false);
       return;
     }
-
-    final tags = _tags.text.split(RegExp(r'[,，]')).map((e) => e.trim().replaceAll('#', '')).where((e) => e.isNotEmpty).toList();
 
     try {
       final Memo m;
@@ -157,8 +169,20 @@ class _EditSheetState extends ConsumerState<_EditSheet> {
       if (mounted) Navigator.pop(context);
       if (uploadFail > 0) _toast('$uploadFail 张图片上传失败');
     } catch (e) {
-      _toast('保存失败：$e');
-      setState(() => _saving = false);
+      // 在线保存失败（网络中断）：新建同样落离线队列
+      if (widget.memo == null) {
+        await ref.read(offlineQueueProvider.notifier).enqueue(PendingMemo(
+              content: content,
+              title: _title.text.trim(),
+              tags: tags,
+              createdAt: DateTime.now().toIso8601String(),
+            ));
+        if (mounted) Navigator.pop(context);
+        _toast('连接中断，已存离线队列，联网后自动同步');
+      } else {
+        _toast('保存失败：$e');
+        setState(() => _saving = false);
+      }
     }
   }
 

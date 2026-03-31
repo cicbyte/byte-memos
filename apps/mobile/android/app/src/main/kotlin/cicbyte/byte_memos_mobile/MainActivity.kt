@@ -15,6 +15,9 @@ class MainActivity : FlutterActivity() {
 
     /// 分享进来的图片（冷启动暂存：mime + base64 内容）
     private var pendingShareImage: Map<String, Any>? = null
+
+    /// 小组件深链速记（冷启动暂存）
+    private var pendingQuickNote = false
     private var channel: MethodChannel? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -33,6 +36,10 @@ class MainActivity : FlutterActivity() {
                         pendingShareText = null
                         pendingShareImage = null
                     }
+                    "takeQuickNote" -> {
+                        result.success(pendingQuickNote)
+                        pendingQuickNote = false
+                    }
                     else -> result.notImplemented()
                 }
             }
@@ -42,9 +49,10 @@ class MainActivity : FlutterActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         android.util.Log.d("BmShare", "onNewIntent action=${intent.action} type=${intent.type}")
-        // 热路径：app 已在后台运行时接收分享
+        // 热路径：app 已在后台运行时接收分享 / 小组件深链
         intent.takeShareText()?.let(sendShareText)
         intent.takeShareImage(this)?.let(sendShareImage)
+        if (intent.isQuickNote()) channel?.invokeMethod("quickNote", null)
     }
 
     private val sendShareText: (Map<String, Any>) -> Unit = { payload ->
@@ -61,8 +69,13 @@ class MainActivity : FlutterActivity() {
         val i = intent
         pendingShareText = i?.takeShareText() ?: pendingShareText
         pendingShareImage = i?.takeShareImage(this) ?: pendingShareImage
+        pendingQuickNote = i?.isQuickNote() ?: false
     }
 }
+
+/// 小组件深链（bytememos://quicknote）
+private fun Intent.isQuickNote(): Boolean =
+    action == Intent.ACTION_VIEW && data?.toString() == "bytememos://quicknote"
 
 /// 从 ACTION_SEND intent 提取标题 + 正文（text/plain；浏览器分享文章常带 subject）
 private fun Intent.takeShareText(): Map<String, Any>? {

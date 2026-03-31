@@ -8,6 +8,7 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
+import '../state/offline_queue.dart';
 import 'edit_sheet.dart';
 import 'flow_page.dart';
 import 'mine_page.dart';
@@ -31,6 +32,22 @@ class _AppShellState extends ConsumerState<AppShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(memosProvider.notifier).refresh();
     });
+    // F15 离线速记：转在线即自动补传
+    ref.listenManual(connProvider.select((c) => c.status), (prev, next) {
+      if (next == ConnStatus.online && (prev == ConnStatus.offline || prev == ConnStatus.keyError)) {
+        _flushOfflineQueue();
+      }
+    });
+  }
+
+  Future<void> _flushOfflineQueue() async {
+    final client = ref.read(connProvider).client;
+    if (client == null) return;
+    final synced = await ref.read(offlineQueueProvider.notifier).flush(client);
+    if (!mounted || synced <= 0) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('已同步 $synced 条离线速记'), duration: const Duration(seconds: 2)),
+    );
   }
 
   @override
@@ -39,6 +56,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final glassPref = ref.watch(glassPrefProvider);
     final conn = ref.watch(connProvider);
     final offline = conn.status == ConnStatus.offline || conn.status == ConnStatus.keyError;
+    final pending = ref.watch(offlineQueueProvider).length;
 
     return Scaffold(
       // 彩色渐变舞台：玻璃的底色
@@ -58,6 +76,8 @@ class _AppShellState extends ConsumerState<AppShell> {
               Column(
                 children: [
                   if (offline) const _OfflineBanner(),
+                  if (pending > 0)
+                    _PendingBanner(count: pending, onTap: _flushOfflineQueue),
                   Expanded(
                     child: IndexedStack(
                       index: _tab,
@@ -225,6 +245,38 @@ class _NavItem extends StatelessWidget {
 }
 
 /// 离线横幅（F07）：状态可视化 + 快照时间
+/// 待同步横幅（F15 离线速记队列非空时）：琥珀色轻提示，点按立即补传
+class _PendingBanner extends StatelessWidget {
+  const _PendingBanner({required this.count, required this.onTap});
+
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Material(
+        color: const Color(0xFFF59E0B).withValues(alpha: 0.85),
+        child: Padding(
+          padding: const EdgeInsets.only(top: 4, bottom: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.sync_rounded, size: 13, color: Colors.white70),
+              const SizedBox(width: 6),
+              Text(
+                '$count 条速记待同步 · 点按立即同步',
+                style: const TextStyle(fontSize: 12, color: Colors.white70),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _OfflineBanner extends ConsumerWidget {
   const _OfflineBanner();
 

@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'design/theme.dart';
+import 'pages/edit_sheet.dart';
 import 'pages/shell.dart';
 import 'share/share_incoming.dart';
 import 'state/conn_state.dart';
@@ -56,6 +57,14 @@ class _HomeState extends ConsumerState<_Home> {
           if (!mounted) return;
           // 延后到 shell 渲染完成再弹层
           showShareSheet(context, ref, text, subject: subject);
+        });
+      },
+      // 小组件深链（F16）：直达速记弹层（离线时由 F15 队列兜底）
+      onQuickNote: () {
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          showEditSheet(context, ref);
         });
       },
       // 分享进来的图片（F14）：收纳为备忘附件

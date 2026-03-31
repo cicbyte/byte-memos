@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 快记小组件（F16）：整块点击 → bytememos://quicknote 深链开速记弹层 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <TextView
+        android:id="@+id/widget_btn"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="✎ 速记"
+        android:textColor="#E6E8EE"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+</LinearLayout>
