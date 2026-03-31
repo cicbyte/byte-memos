@@ -8,7 +8,6 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
-import 'ai_chat_page.dart';
 import 'appearance_page.dart';
 import 'connections_page.dart';
 import 'trash_page.dart';
@@ -33,27 +32,13 @@ class MinePage extends ConsumerWidget {
         _ConnHero(fg: fg, glassPref: glassPref),
         const SizedBox(height: 20),
 
-        // ===== 工具 =====
-        _GroupLabel('工具', fg),
-        const SizedBox(height: 8),
+        // ===== 回收站 =====
         GlassContainer(
           tier: GlassTier.flat,
           preference: glassPref,
           borderRadius: BorderRadius.circular(18),
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: Column(
-            children: [
-              _Row(
-                icon: Icons.auto_awesome_rounded,
-                tint: kPrimary,
-                title: 'AI 助手',
-                subtitle: '对话 · 流式 · 沿用桌面端模型',
-                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiChatPage())),
-              ),
-              _Divider(fg: fg),
-              const _TrashRow(),
-            ],
-          ),
+          child: const _TrashRow(),
         ),
         const SizedBox(height: 20),
 
@@ -234,19 +219,6 @@ class _Row extends StatelessWidget {
       onTap: onTap,
     );
   }
-}
-
-/// 组内分隔线
-class _Divider extends StatelessWidget {
-  const _Divider({required this.fg});
-
-  final Color fg;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(left: 60),
-        child: Container(height: 0.5, color: fg.withValues(alpha: 0.08)),
-      );
 }
 
 /// 回收站行（带数量角标）

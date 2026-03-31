@@ -12,6 +12,7 @@ import '../state/conn_state.dart';
 import '../state/memos_state.dart';
 import '../util/checklist.dart';
 import '../widgets/memo_card.dart';
+import 'ai_chat_page.dart';
 import 'detail_page.dart';
 
 class FlowPage extends ConsumerWidget {
@@ -40,6 +41,20 @@ class FlowPage extends ConsumerWidget {
                 style: TextStyle(fontSize: 11.5, color: fg.withValues(alpha: 0.45)),
               ),
               const Spacer(),
+              // AI 助手（D3）：内容场景直达对话页
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiChatPage())),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: kPrimary.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: const Icon(Icons.auto_awesome_rounded, size: 17, color: kPrimary),
+                ),
+              ),
+              const SizedBox(width: 4),
               _ViewToggle(dark: dark, fg: fg),
             ],
           ),
