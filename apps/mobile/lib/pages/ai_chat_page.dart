@@ -224,7 +224,7 @@ class _ModelChip extends ConsumerWidget {
                               title: Text(o.$2, style: const TextStyle(fontSize: 13.5)),
                               subtitle: Text(o.$1, style: const TextStyle(fontSize: 11)),
                               onTap: () {
-                                ref.read(aiSelectionProvider.notifier).state = (o.$3, o.$2);
+                                ref.read(aiSelectionProvider.notifier).set((o.$3, o.$2));
                                 Navigator.pop(ctx);
                               },
                             ),

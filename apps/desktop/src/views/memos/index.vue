@@ -590,6 +590,22 @@ async function togglePin(m: Memo) {
   }
 }
 
+/** 复制公开链接（/m/{id} 免认证落地页；与移动端分享链路同源） */
+async function copyPublicLink(m: Memo) {
+  if (m.visibility !== "PUBLIC") {
+    message.warning("仅公开备忘可生成链接（先在编辑里设为公开）");
+    return;
+  }
+  try {
+    const p = await api.mobilePairingInfo();
+    const url = `http://${p.host}:${p.port}/m/${m.short_id}`;
+    await navigator.clipboard.writeText(url);
+    message.success("链接已复制");
+  } catch {
+    message.error("复制失败");
+  }
+}
+
 function remove(m: Memo) {
   Modal.confirm({
     title: "移入回收站",
@@ -1081,6 +1097,7 @@ onMounted(load);
               @pin="togglePin"
               @del="remove"
               @ai="(m: Memo, act: string, lang: string) => openAi(m, act, lang)"
+              @link="copyPublicLink"
             />
 
             <!-- 卡片网格 -->
@@ -1103,6 +1120,7 @@ onMounted(load);
                   <button class="op-btn" :class="{ on: m.pinned }" title="置顶/取消置顶" @click.stop="togglePin(m)">
                     <PushpinFilled v-if="m.pinned" /><PushpinOutlined v-else />
                   </button>
+                  <button class="op-btn" :class="{ on: m.visibility === 'PUBLIC' }" title="复制公开链接" @click.stop="copyPublicLink(m)"><LinkOutlined /></button>
                   <button class="op-btn" title="编辑" @click.stop="openEdit(m)"><EditOutlined /></button>
                   <a-dropdown :trigger="['click']">
                     <button class="op-btn" title="AI 动作" @click.stop>

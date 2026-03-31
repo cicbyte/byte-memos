@@ -12,6 +12,7 @@ import {
   PushpinOutlined,
   EditOutlined,
   DeleteOutlined,
+  LinkOutlined,
 } from "@ant-design/icons-vue";
 import { AI_ACTIONS, TRANSLATE_LANGS } from "../aiActions";
 import type { Memo } from "@/api/types";
@@ -26,6 +27,7 @@ const emit = defineEmits<{
   (e: "pin", m: Memo): void;
   (e: "del", m: Memo): void;
   (e: "ai", m: Memo, action: string, lang: string): void;
+  (e: "link", m: Memo): void;
 }>();
 
 interface Entry {
@@ -129,6 +131,7 @@ function dotColor(m: Memo): string {
             >
               <PushpinFilled v-if="entry.memo.pinned" /><PushpinOutlined v-else />
             </button>
+            <button class="tl-op" title="复制公开链接" @click.stop="emit('link', entry.memo)"><LinkOutlined /></button>
             <button class="tl-op" title="编辑" @click.stop="emit('open', entry.memo)"><EditOutlined /></button>
             <a-dropdown :trigger="['click']">
               <button class="tl-op" title="AI 动作" @click.stop>

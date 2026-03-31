@@ -15,7 +15,39 @@ final aiProvidersProvider = FutureProvider<List<AiProvider>>((ref) async {
 });
 
 /// 当前选择 (providerId, modelName)；null = 用服务端默认（已启用的供应商）
-final aiSelectionProvider = StateProvider<(int, String)?>((ref) => null);
+/// 持久化（重装/换机前提下的本地记忆）
+final aiSelectionProvider = StateNotifierProvider<AiSelectionNotifier, (int, String)?>((ref) {
+  return AiSelectionNotifier(ref);
+});
+
+class AiSelectionNotifier extends StateNotifier<(int, String)?> {
+  AiSelectionNotifier(this._ref) : super(null) {
+    _load();
+  }
+
+  static const _key = 'bm.ai.selection';
+
+  final Ref _ref;
+
+  Future<void> _load() async {
+    try {
+      final prefs = await _ref.read(sharedPrefsProvider.future);
+      final raw = prefs.getString(_key);
+      if (raw == null) return;
+      final parts = raw.split('|');
+      final id = int.tryParse(parts[0]);
+      if (id != null && parts.length == 2) state = (id, parts[1]);
+    } catch (_) {}
+  }
+
+  Future<void> set((int, String)? sel) async {
+    state = sel;
+    try {
+      final prefs = await _ref.read(sharedPrefsProvider.future);
+      await prefs.setString(_key, sel == null ? '' : '${sel.$1}|${sel.$2}');
+    } catch (_) {}
+  }
+}
 
 class ChatMsg {
   ChatMsg({required this.role, required this.content});
