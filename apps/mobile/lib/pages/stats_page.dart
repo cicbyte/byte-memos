@@ -8,6 +8,7 @@ import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
+import 'trash_page.dart';
 
 class StatsPage extends ConsumerWidget {
   const StatsPage({super.key});
@@ -66,7 +67,7 @@ class StatsPage extends ConsumerWidget {
               _StatCard(icon: Icons.local_fire_department_rounded, color: const Color(0xFFF59E0B), label: '连续记录', value: '${act.streak} 天', fg: fg),
               _StatCard(icon: Icons.check_box_outline_blank_rounded, color: kPrimary, label: '未完成待办', value: '${act.todos}', fg: fg),
               _StatCard(icon: Icons.push_pin_rounded, color: const Color(0xFFF59E0B), label: '置顶', value: '${s.pinnedCount}', fg: fg),
-              _StatCard(icon: Icons.delete_rounded, color: const Color(0xFFFF4444), label: '回收站', value: '${s.trashedCount}', fg: fg),
+              _StatCard(icon: Icons.delete_rounded, color: const Color(0xFFFF4444), label: '回收站', value: '${s.trashedCount}', fg: fg, onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrashPage()))),
               _StatCard(icon: Icons.folder_rounded, color: kAccent, label: '分类', value: '${s.categoryCount}', fg: fg),
             ],
           ),
@@ -113,17 +114,18 @@ class StatsPage extends ConsumerWidget {
 }
 
 class _StatCard extends StatelessWidget {
-  const _StatCard({required this.icon, required this.color, required this.label, required this.value, required this.fg});
+  const _StatCard({required this.icon, required this.color, required this.label, required this.value, required this.fg, this.onTap});
 
   final IconData icon;
   final Color color;
   final String label;
   final String value;
   final Color fg;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GlassContainer(
+    final card = GlassContainer(
       tier: GlassTier.flat,
       preference: ref0(context),
       borderRadius: BorderRadius.circular(16),
@@ -137,6 +139,9 @@ class _StatCard extends StatelessWidget {
               Icon(icon, size: 15, color: color),
               const SizedBox(width: 5),
               Text(label, style: TextStyle(fontSize: 11.5, color: fg.withValues(alpha: 0.6))),
+              const Spacer(),
+              if (onTap != null)
+                Icon(Icons.chevron_right_rounded, size: 13, color: fg.withValues(alpha: 0.3)),
             ],
           ),
           const SizedBox(height: 5),
@@ -147,6 +152,8 @@ class _StatCard extends StatelessWidget {
         ],
       ),
     );
+    if (onTap == null) return card;
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: card);
   }
 
   // flat 卡片无需偏好读取（0 blur），直接静态返回，避免无谓 rebuild

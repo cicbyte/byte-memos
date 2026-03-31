@@ -7,10 +7,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
-import '../state/memos_state.dart';
 import 'appearance_page.dart';
 import 'connections_page.dart';
-import 'trash_page.dart';
 
 class MinePage extends ConsumerWidget {
   const MinePage({super.key});
@@ -30,16 +28,6 @@ class MinePage extends ConsumerWidget {
 
         // ===== 连接 Hero 卡（点进连接管理） =====
         _ConnHero(fg: fg, glassPref: glassPref),
-        const SizedBox(height: 20),
-
-        // ===== 回收站 =====
-        GlassContainer(
-          tier: GlassTier.flat,
-          preference: glassPref,
-          borderRadius: BorderRadius.circular(18),
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-          child: const _TrashRow(),
-        ),
         const SizedBox(height: 20),
 
         // ===== 设置 =====
@@ -187,7 +175,6 @@ class _Row extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
-    this.trailing,
   });
 
   final IconData icon;
@@ -195,7 +182,6 @@ class _Row extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
-  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
@@ -215,43 +201,8 @@ class _Row extends StatelessWidget {
       ),
       title: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: fg)),
       subtitle: subtitle.isEmpty ? null : Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
-      trailing: trailing ?? Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
+      trailing: Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
       onTap: onTap,
-    );
-  }
-}
-
-/// 回收站行（带数量角标）
-class _TrashRow extends ConsumerWidget {
-  const _TrashRow();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
-    final trashed = ref.watch(statsProvider).maybeWhen(data: (s) => s.trashedCount, orElse: () => 0);
-    return _Row(
-      icon: Icons.delete_outline_rounded,
-      tint: fg.withValues(alpha: 0.55),
-      title: '回收站',
-      subtitle: trashed > 0 ? '$trashed 条待恢复' : '空',
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (trashed > 0)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: kPrimary.withValues(alpha: 0.16),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text('$trashed', style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w600, color: dark ? Colors.white : kPrimary)),
-            ),
-          const SizedBox(width: 6),
-          Icon(Icons.chevron_right_rounded, size: 20, color: fg.withValues(alpha: 0.35)),
-        ],
-      ),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TrashPage())),
     );
   }
 }
