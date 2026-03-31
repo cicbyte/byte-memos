@@ -1,4 +1,4 @@
-/// 我的页：连接状态 Hero 卡 + 分组入口（工具 / 设置）· 操作进二级页
+/// 我的页：连接 Hero + 数据速览 + 设置 / 关于 · 操作进二级页
 library;
 
 import 'package:flutter/material.dart';
@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../design/glass.dart';
 import '../design/theme.dart';
 import '../state/conn_state.dart';
+import '../state/memos_state.dart';
 import 'appearance_page.dart';
 import 'connections_page.dart';
 
@@ -19,6 +20,7 @@ class MinePage extends ConsumerWidget {
     final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
     final glassPref = ref.watch(glassPrefProvider);
     final themeMode = ref.watch(themeModeProvider);
+    final act = ref.watch(streakProvider).valueOrNull ?? const ActivityStats(today: 0, streak: 0, todos: 0);
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 190),
@@ -28,6 +30,24 @@ class MinePage extends ConsumerWidget {
 
         // ===== 连接 Hero 卡（点进连接管理） =====
         _ConnHero(fg: fg, glassPref: glassPref),
+        const SizedBox(height: 12),
+
+        // ===== 数据速览（今日 / 连续 / 待办） =====
+        GlassContainer(
+          tier: GlassTier.flat,
+          preference: glassPref,
+          borderRadius: BorderRadius.circular(18),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14),
+          child: Row(
+            children: [
+              _StatMini(value: '${act.today}', label: '今日', color: kPrimary, fg: fg),
+              _VDiv(fg: fg),
+              _StatMini(value: '${act.streak}', label: '连续天', color: const Color(0xFFF59E0B), fg: fg),
+              _VDiv(fg: fg),
+              _StatMini(value: '${act.todos}', label: '待办', color: kAccent, fg: fg),
+            ],
+          ),
+        ),
         const SizedBox(height: 20),
 
         // ===== 设置 =====
@@ -50,16 +70,117 @@ class MinePage extends ConsumerWidget {
             onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AppearancePage())),
           ),
         ),
+        const SizedBox(height: 20),
+
+        // ===== 关于 =====
+        _GroupLabel('关于', fg),
+        const SizedBox(height: 8),
+        GlassContainer(
+          tier: GlassTier.flat,
+          preference: glassPref,
+          borderRadius: BorderRadius.circular(18),
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: _Row(
+            icon: Icons.bookmark_rounded,
+            tint: kPrimary,
+            title: '关于 byte-memos',
+            subtitle: 'v0.1.0 · 液态玻璃设计',
+            onTap: () => _showAbout(context, ref, fg),
+          ),
+        ),
         const SizedBox(height: 24),
         Center(
           child: Text(
-            'byte-memos mobile v0.1.0 · 液态玻璃设计',
+            'byte-memos · 液态玻璃设计',
             style: TextStyle(fontSize: 10.5, color: fg.withValues(alpha: 0.4)),
           ),
         ),
       ],
     );
   }
+  /// 关于弹层：应用介绍 + 技术栈
+  void _showAbout(BuildContext context, WidgetRef ref, Color fg) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => GlassContainer(
+        tier: GlassTier.thick,
+        preference: ref.read(glassPrefProvider),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    gradient: LinearGradient(colors: [kPrimary.withValues(alpha: 0.35), kAccent.withValues(alpha: 0.35)]),
+                  ),
+                  child: const Icon(Icons.sticky_note_2_rounded, size: 21, color: kPrimary),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('byte-memos', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: fg)),
+                    const SizedBox(height: 2),
+                    Text('v0.1.0 · 液态玻璃设计', style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.5))),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '自托管的双端备忘录：桌面端（Tauri）管库与 AI，移动端（Flutter）扫码配对、随手记、时间轴浏览、勾选待办与图片收纳。',
+              style: TextStyle(fontSize: 12.5, height: 1.8, color: fg.withValues(alpha: 0.75)),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '设计语言 · 液态玻璃（分层磨砂 / 透明度层级）\n数据 · 局域网 REST 直连桌面端，不经过任何云端',
+              style: TextStyle(fontSize: 11, height: 1.9, color: fg.withValues(alpha: 0.45)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 数据速览小列
+class _StatMini extends StatelessWidget {
+  const _StatMini({required this.value, required this.label, required this.color, required this.fg});
+
+  final String value;
+  final String label;
+  final Color color;
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 21, fontWeight: FontWeight.w800, color: color, height: 1.15)),
+          const SizedBox(height: 3),
+          Text(label, style: TextStyle(fontSize: 10.5, color: fg.withValues(alpha: 0.5))),
+        ],
+      ),
+    );
+  }
+}
+
+class _VDiv extends StatelessWidget {
+  const _VDiv({required this.fg});
+
+  final Color fg;
+
+  @override
+  Widget build(BuildContext context) => Container(width: 0.5, height: 30, color: fg.withValues(alpha: 0.1));
 }
 
 /// 分组标签
@@ -167,21 +288,21 @@ class _ConnHero extends ConsumerWidget {
   static String _shortUrl(String url) => url.replaceFirst(RegExp(r'^https?://'), '');
 }
 
-/// 统一设置行：圆角渐变图标 + 标题 + 摘要 + chevron
+/// 统一设置行：圆角渐变图标 + 标题 + 摘要 + chevron（fixedTrailing 覆盖右侧）
 class _Row extends StatelessWidget {
   const _Row({
     required this.icon,
     required this.tint,
     required this.title,
     required this.subtitle,
-    required this.onTap,
+    this.onTap,
   });
 
   final IconData icon;
   final Color tint;
   final String title;
   final String subtitle;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
