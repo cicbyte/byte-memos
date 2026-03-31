@@ -41,7 +41,7 @@ use memos::{
 };
 use categories::{create_category, delete_category, list_categories, rename_category};
 use docs::{openapi_spec, swagger_ui};
-use stats::{stats_overview, tag_stats};
+use stats::{daily_counts, stats_overview, tag_stats};
 use trash::{empty_trash, list_trashed, purge_item, restore_item};
 use attachments::{delete_attachment_rest, download_attachment, list_attachments, upload_attachment};
 #[cfg(feature = "ai")]
@@ -209,6 +209,7 @@ fn build_routes() -> Router<ApiState> {
         .route("/categories/{id}", put(rename_category).delete(delete_category))
         // 统计 / 标签
         .route("/stats", get(stats_overview))
+        .route("/stats/daily", get(daily_counts))
         .route("/tags", get(tag_stats))
         // 搜索
         .route("/search/memos", get(search_memos))

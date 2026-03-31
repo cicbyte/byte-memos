@@ -15,6 +15,14 @@ pub(super) async fn stats_overview(AxumState(state): AxumState<ApiState>) -> Res
     }
 }
 
+/// 日历热力图数据源：按本地日期聚合未删除备忘数（移动端日历视图）
+pub(super) async fn daily_counts(AxumState(state): AxumState<ApiState>) -> Response {
+    match state.svc.list_memo_daily_counts() {
+        Ok(list) => Json(list).into_response(),
+        Err(e) => err_resp(e),
+    }
+}
+
 #[derive(Deserialize)]
 pub(super) struct TagStatsQ {
     #[serde(default = "default_limit_50")]

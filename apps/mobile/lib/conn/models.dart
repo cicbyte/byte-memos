@@ -102,6 +102,19 @@ class StatsOverview {
       );
 }
 
+/// 单日备忘数（日历视图数据源，本地日期键）
+class DailyCount {
+  const DailyCount({required this.date, required this.count});
+
+  final String date;
+  final int count;
+
+  factory DailyCount.fromJson(Map<String, dynamic> j) => DailyCount(
+        date: j['date'] as String? ?? '',
+        count: j['count'] as int? ?? 0,
+      );
+}
+
 class TagStat {
   const TagStat({required this.tag, required this.count});
 

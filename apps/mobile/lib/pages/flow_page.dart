@@ -68,9 +68,11 @@ class FlowPage extends ConsumerWidget {
               ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
               : memos.items.isEmpty
                   ? const _Empty()
-                  : ref.watch(flowViewModeProvider) == FlowViewMode.timeline
-                      ? _TimelineList(memos: memos)
-                      : _FlowList(memos: memos),
+                  : switch (ref.watch(flowViewModeProvider)) {
+                      FlowViewMode.timeline => _TimelineList(memos: memos),
+                      FlowViewMode.card => _FlowList(memos: memos),
+                      FlowViewMode.calendar => _CalendarList(memos: memos),
+                    },
         ),
       ],
     );
@@ -198,7 +200,258 @@ class _ViewToggle extends ConsumerWidget {
         btn(Icons.view_timeline_rounded, FlowViewMode.timeline, '时间轴'),
         const SizedBox(width: 4),
         btn(Icons.grid_view_rounded, FlowViewMode.card, '卡片'),
+        const SizedBox(width: 4),
+        btn(Icons.calendar_month_rounded, FlowViewMode.calendar, '日历'),
       ],
+    );
+  }
+}
+
+/// 日历视图（与桌面端 MemoCalendar 同形态）：月网格 + 日计数点 + 选中日列表
+class _CalendarList extends ConsumerStatefulWidget {
+  const _CalendarList({required this.memos});
+
+  final MemosState memos;
+
+  @override
+  ConsumerState<_CalendarList> createState() => _CalendarListState();
+}
+
+class _CalendarListState extends ConsumerState<_CalendarList> {
+  DateTime _month = DateTime.now();
+  DateTime? _selected;
+
+  static const _weekLabels = ['一', '二', '三', '四', '五', '六', '日'];
+
+  /// 月网格：周一开头，前置补位；42 格（null = 非本月）
+  List<DateTime?> _cells(DateTime month) {
+    final lead = (DateTime(month.year, month.month, 1).weekday - 1) % 7; // 周一=0
+    final days = DateTime(month.year, month.month + 1, 0).day;
+    return [
+      for (var i = 0; i < lead; i++) null,
+      for (var d = 1; d <= days; d++) DateTime(month.year, month.month, d),
+      for (var i = lead + days; i < 42; i++) null,
+    ];
+  }
+
+  static String _key(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+    final counts = ref.watch(dailyCountsProvider).valueOrNull ?? const <String, int>{};
+    final today = DateTime.now();
+    final cells = _cells(_month);
+
+    // 选中日的备忘（本地日期匹配；待办/分类筛选同作用）
+    final filter = ref.watch(categoryFilterProvider);
+    final todo = ref.watch(todoFilterProvider);
+    List<Memo> dayMemos = [];
+    if (_selected != null) {
+      final k = _key(_selected!);
+      dayMemos = widget.memos.items.where((m) {
+        final c = m.created?.toLocal();
+        if (c == null || _key(c) != k) return false;
+        if (todo && countUnchecked(m.content) == 0) return false;
+        if (!todo && filter != null && (m.category ?? '') != filter) return false;
+        return true;
+      }).toList()
+        ..sort((a, b) => (b.created ?? DateTime(0)).compareTo(a.created ?? DateTime(0)));
+    }
+
+    return Column(
+      children: [
+        // 月导航
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 6, 12, 2),
+          child: Row(
+            children: [
+              Text('${_month.year}年${_month.month}月',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: fg)),
+              const Spacer(),
+              if (_selected != null)
+                TextButton(
+                  onPressed: () => setState(() {
+                    _month = DateTime.now();
+                    _selected = DateTime.now();
+                  }),
+                  child: const Text('回今天', style: TextStyle(fontSize: 12)),
+                ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.chevron_left_rounded, size: 22, color: fg.withValues(alpha: 0.5)),
+                onPressed: () => setState(() => _month = DateTime(_month.year, _month.month - 1, 1)),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: Icon(Icons.chevron_right_rounded, size: 22, color: fg.withValues(alpha: 0.5)),
+                onPressed: () => setState(() => _month = DateTime(_month.year, _month.month + 1, 1)),
+              ),
+            ],
+          ),
+        ),
+        // 周头
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Row(
+            children: [
+              for (final w in _weekLabels)
+                Expanded(
+                  child: Center(child: Text(w, style: TextStyle(fontSize: 10.5, color: fg.withValues(alpha: 0.4)))),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        // 日网格
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(
+            children: [
+              for (var r = 0; r < 6; r++)
+                Row(
+                  children: [
+                    for (var c = 0; c < 7; c++) _cell(cells[r * 7 + c], counts, today, fg),
+                  ],
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 6),
+        // 选中日列表
+        Expanded(
+          child: _selected == null
+              ? Center(child: Text('点日期看当天的备忘', style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.4))))
+              : RefreshIndicator(
+                  onRefresh: () => ref.read(memosProvider.notifier).refresh(),
+                  color: kPrimary,
+                  child: dayMemos.isEmpty
+                      ? ListView(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 40),
+                              child: Center(
+                                child: Text('${_selected!.month}月${_selected!.day}日 · 无备忘',
+                                    style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.4))),
+                              ),
+                            ),
+                          ],
+                        )
+                      : ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 190),
+                          itemCount: dayMemos.length + 1,
+                          itemBuilder: (context, i) {
+                            if (i == 0) {
+                              return Padding(
+                                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                                child: Text(
+                                  '${_selected!.month}月${_selected!.day}日 · ${dayMemos.length} 条',
+                                  style: TextStyle(
+                                      fontSize: 12.5, fontWeight: FontWeight.w700, fontFamily: 'serif', color: fg),
+                                ),
+                              );
+                            }
+                            final m = dayMemos[i - 1];
+                            final dt = m.created?.toLocal();
+                            final time = dt == null
+                                ? ''
+                                : '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+                            final excerpt = (m.title.isNotEmpty ? m.title : m.content)
+                                .replaceAll(RegExp(r'[#>*_~`\-]+'), ' ')
+                                .replaceAll(RegExp(r'\s+'), ' ')
+                                .trim();
+                            return GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _openDetail(context, ref, m),
+                              onLongPress: () => _quickActions(context, ref, m),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Row(
+                                  children: [
+                                    SizedBox(
+                                      width: 38,
+                                      child: Text(time, style: TextStyle(fontSize: 11, color: fg.withValues(alpha: 0.45))),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        excerpt.isEmpty ? '（无标题）' : excerpt,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: fg),
+                                      ),
+                                    ),
+                                    if (m.pinned) ...[
+                                      const SizedBox(width: 6),
+                                      Icon(Icons.push_pin_rounded, size: 11, color: kPrimary.withValues(alpha: 0.9)),
+                                    ],
+                                    if (m.tags.isNotEmpty) ...[
+                                      const SizedBox(width: 6),
+                                      Text('#${m.tags.first}',
+                                          style: TextStyle(fontSize: 10, color: kPrimary.withValues(alpha: 0.7))),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _cell(DateTime? d, Map<String, int> counts, DateTime today, Color fg) {
+    if (d == null) return const Expanded(child: SizedBox(height: 46));
+    final n = counts[_key(d)] ?? 0;
+    final isToday = d.year == today.year && d.month == today.month && d.day == today.day;
+    final isSel = _selected != null &&
+        d.year == _selected!.year &&
+        d.month == _selected!.month &&
+        d.day == _selected!.day;
+    final isFuture = d.isAfter(DateTime(today.year, today.month, today.day));
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _selected = d),
+        child: Container(
+          height: 46,
+          margin: const EdgeInsets.all(1.5),
+          decoration: BoxDecoration(
+            color: isSel ? kPrimary.withValues(alpha: 0.16) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: isToday && !isSel ? Border.all(color: kPrimary.withValues(alpha: 0.45), width: 1.2) : null,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '${d.day}',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: isToday || isSel ? FontWeight.w700 : FontWeight.w400,
+                  color: isFuture ? fg.withValues(alpha: 0.3) : (isSel ? kPrimary : fg.withValues(alpha: 0.8)),
+                ),
+              ),
+              const SizedBox(height: 3),
+              // 计数点：有记录的主色小点（多条加宽）
+              Container(
+                width: n > 0 ? (n > 1 ? 12.0 : 5.0) : 0,
+                height: n > 0 ? 3.5 : 0,
+                decoration: BoxDecoration(
+                  color: kPrimary.withValues(alpha: isSel ? 1 : 0.55),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

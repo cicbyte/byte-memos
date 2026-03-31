@@ -155,6 +155,12 @@ class BmClient {
     return StatsOverview.fromJson(data as Map<String, dynamic>);
   }
 
+  /// 日历热力图：按本地日期聚合的备忘数
+  Future<List<DailyCount>> dailyCounts() async {
+    final data = await _guard(() => _dio.get<dynamic>('/stats/daily'));
+    return (data as List<dynamic>).map((e) => DailyCount.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<TagStat>> tagStats() async {
     final data = await _guard(() => _dio.get<dynamic>('/tags'));
     return (data as List<dynamic>).map((e) => TagStat.fromJson(e as Map<String, dynamic>)).toList();

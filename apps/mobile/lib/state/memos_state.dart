@@ -215,11 +215,20 @@ final statsProvider = FutureProvider<StatsOverview>((ref) async {
   return client.stats();
 });
 
+/// 日历视图数据源：本地日期键 → 当日备忘数（随流页刷新联动）
+final dailyCountsProvider = FutureProvider<Map<String, int>>((ref) async {
+  ref.watch(memosProvider.select((s) => s.lastSyncAt));
+  final client = ref.watch(connProvider).client;
+  if (client == null) throw const BmApiException(0, '离线');
+  final list = await client.dailyCounts();
+  return {for (final d in list) d.date: d.count};
+});
+
 /// 记录活跃度：今日新增 + 连续记录天数 + 未完成待办（F12 / 轻量待办）
 final todoFilterProvider = StateProvider<bool>((ref) => false);
 
-/// 流页视图形态：timeline（默认，与桌面端一致）/ card，持久化
-enum FlowViewMode { timeline, card }
+/// 流页视图形态：timeline（默认，与桌面端一致）/ card / calendar，持久化
+enum FlowViewMode { timeline, card, calendar }
 
 final flowViewModeProvider = StateNotifierProvider<FlowViewModeNotifier, FlowViewMode>((ref) {
   return FlowViewModeNotifier(ref);
@@ -235,7 +244,9 @@ class FlowViewModeNotifier extends StateNotifier<FlowViewMode> {
   Future<void> _load() async {
     try {
       final prefs = await _ref.read(sharedPrefsProvider.future);
-      if (prefs.getString('bm.flow.view') == 'card') state = FlowViewMode.card;
+      final v = prefs.getString('bm.flow.view');
+      if (v == 'card') state = FlowViewMode.card;
+      if (v == 'calendar') state = FlowViewMode.calendar;
     } catch (_) {}
   }
 
@@ -243,7 +254,11 @@ class FlowViewModeNotifier extends StateNotifier<FlowViewMode> {
     state = m;
     try {
       final prefs = await _ref.read(sharedPrefsProvider.future);
-      await prefs.setString('bm.flow.view', m == FlowViewMode.card ? 'card' : 'timeline');
+      await prefs.setString('bm.flow.view', switch (m) {
+        FlowViewMode.card => 'card',
+        FlowViewMode.calendar => 'calendar',
+        FlowViewMode.timeline => 'timeline',
+      });
     } catch (_) {}
   }
 }
