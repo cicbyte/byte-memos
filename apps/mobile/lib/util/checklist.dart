@@ -38,6 +38,21 @@ int countAll(String content) {
   return n;
 }
 
+/// 勾选清单条目（文档顺序）：(文本, 是否已勾)
+List<(String, bool)> checklistItems(String content) {
+  final items = <(String, bool)>[];
+  for (final line in content.split('\n')) {
+    final m = _boxRe.firstMatch(line);
+    if (m != null) {
+      final text = line.substring(m.end).trim();
+      if (text.isNotEmpty) {
+        items.add((text, m.group(2) == 'x' || m.group(2) == 'X'));
+      }
+    }
+  }
+  return items;
+}
+
 /// 翻转第 n 个勾选框（0 基，文档顺序）；越界返回原内容
 String toggleCheckbox(String content, int n) {
   final lineNo = _lineOfNth(content, n);

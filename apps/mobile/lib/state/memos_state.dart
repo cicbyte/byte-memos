@@ -227,6 +227,21 @@ final dailyCountsProvider = FutureProvider<Map<String, int>>((ref) async {
 /// 记录活跃度：今日新增 + 连续记录天数 + 未完成待办（F12 / 轻量待办）
 final todoFilterProvider = StateProvider<bool>((ref) => false);
 
+/// 批量操作（F18）：多选模式开关 + 选中 id 集（空集 = 未选任何条目）
+final selectModeProvider = StateProvider<bool>((ref) => false);
+
+class FlowSelectNotifier extends StateNotifier<Set<String>> {
+  FlowSelectNotifier() : super(<String>{});
+
+  void toggle(String id) => state = state.contains(id) ? ({...state}..remove(id)) : {...state, id};
+
+  void addAll(Iterable<String> ids) => state = {...state, ...ids};
+
+  void clear() => state = <String>{};
+}
+
+final flowSelectProvider = StateNotifierProvider<FlowSelectNotifier, Set<String>>((ref) => FlowSelectNotifier());
+
 /// 流页视图形态：timeline（默认，与桌面端一致）/ card / calendar，持久化
 enum FlowViewMode { timeline, card, calendar }
 

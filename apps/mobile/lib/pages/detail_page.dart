@@ -2,6 +2,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -15,6 +16,7 @@ import '../design/theme.dart';
 import '../state/conn_state.dart';
 import '../state/memos_state.dart';
 import '../util/checklist.dart';
+import '../util/ics_export.dart';
 import 'edit_sheet.dart';
 
 class DetailPage extends ConsumerStatefulWidget {
@@ -124,6 +126,22 @@ class _DetailPageState extends ConsumerState<DetailPage> {
     Share.share(text);
   }
 
+  /// 待办外发 .ics（T4）：未完成待办 → 全天事件文件，交给系统日历/钉钉导入
+  Future<void> _exportIcs() async {
+    final m = _memo;
+    if (m == null) return;
+    final ics = buildTodoIcs(m);
+    if (ics.isEmpty) {
+      _toast('没有未完成的待办');
+      return;
+    }
+    final n = ics.split('BEGIN:VEVENT').length - 1;
+    await Share.shareXFiles([
+      XFile.fromData(utf8.encode(ics), name: '待办-${m.shortId}.ics', mimeType: 'text/calendar'),
+    ]);
+    if (mounted) _toast('已导出 $n 条待办，选择日历应用导入');
+  }
+
   void _toast(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
@@ -192,6 +210,8 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                                 showEditSheet(context, ref, memo: m);
                               case 'todo':
                                 _aiExtract(m);
+                              case 'ics':
+                                _exportIcs();
                               case 'share':
                                 _shareOut();
                               case 'delete':
@@ -201,6 +221,11 @@ class _DetailPageState extends ConsumerState<DetailPage> {
                           itemBuilder: (_) => [
                             const PopupMenuItem(value: 'edit', child: Text('编辑', style: TextStyle(fontSize: 14))),
                             const PopupMenuItem(value: 'todo', child: Text('AI 抽待办', style: TextStyle(fontSize: 14))),
+                            if (countAll(m.content) > 0)
+                              const PopupMenuItem(
+                                value: 'ics',
+                                child: Text('待办→日历 (.ics)', style: TextStyle(fontSize: 14)),
+                              ),
                             const PopupMenuItem(value: 'share', child: Text('分享出去', style: TextStyle(fontSize: 14))),
                             const PopupMenuItem(
                               value: 'delete',

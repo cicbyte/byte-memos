@@ -134,6 +134,8 @@ fn api_router(state: ApiState) -> Router {
         .route("/api/v1/openapi.json", get(openapi_spec))
         // 公开分享页（无需认证；仅 PUBLIC 可见，其余 404）——链接分享落地页
         .route("/m/{id}", get(public_memo_page).with_state(state.clone()))
+        // 公开附件（无需认证；仅 PUBLIC 备忘的图片附件可读，其余一律 404）
+        .route("/m/{id}/att/{att_id}", get(public_memo_attachment).with_state(state.clone()))
 }
 
 /// 公开备忘分享页：极简无依赖 HTML（内容为 Markdown 源文，pre-wrap 呈现）
@@ -142,7 +144,7 @@ async fn public_memo_page(AxumState(state): AxumState<ApiState>, Path(id): Path<
         let html = format!(
             "<!doctype html><html lang=\"zh\"><head><meta charset=\"utf-8\">\
 <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\
-<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'\">\
+<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; img-src 'self'\">\
 <title>{t}</title><style>\
 :root{{color-scheme:light dark}}body{{margin:0;font:16px/1.8 -apple-system,'Segoe UI',sans-serif;\
 background:#f6f4ef;color:#1f2328;display:flex;justify-content:center;min-height:100vh}}\
@@ -150,6 +152,9 @@ main{{max-width:680px;padding:48px 24px;width:100%;box-sizing:border-box}}\
 h1{{font-size:1.45em;margin:0 0 .4em}}\
 .meta{{font-size:.82em;color:#8a8f98;margin-bottom:2.2em}}\
 pre.content{{white-space:pre-wrap;word-break:break-word;font:inherit;margin:0}}\
+.atts{{display:grid;gap:12px;margin:1.8em 0 0}}\
+.atts figure{{margin:0}}\
+.atts img{{max-width:100%;height:auto;border-radius:10px;border:1px solid rgba(128,128,128,.18);display:block}}\
 .tag{{display:inline-block;margin-right:.6em;color:#0e7a6f;font-size:.85em}}\
 footer{{margin-top:4em;font-size:.75em;color:#b0b4bb}}\
 @media(prefers-color-scheme:dark){{body{{background:#161817;color:#e6e8ee}}.meta{{color:#7d828c}}footer{{color:#565b63}}}}\
@@ -179,14 +184,63 @@ footer{{margin-top:4em;font-size:.75em;color:#b0b4bb}}\
         );
     }
     let tags = m.tags.iter().map(|t| format!("<span class=\"tag\">#{}</span>", html_escape(t))).collect::<Vec<_>>().join("");
+    // 公开页附件图廊：仅 image/*，走 /m/{id}/att/{att_id} 公开端点
+    let atts = state
+        .svc
+        .list_attachments(&id)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| a.mime_type.starts_with("image/"))
+        .map(|a| {
+            format!(
+                "<figure><img src=\"/m/{}/att/{}\" alt=\"{}\" loading=\"lazy\"></figure>",
+                html_escape(&id),
+                a.id,
+                html_escape(&a.filename)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let gallery = if atts.is_empty() { String::new() } else { format!("<div class=\"atts\">{}</div>", atts) };
     let body = format!(
-        "<h1>{}</h1><p class=\"meta\">{}{}</p><pre class=\"content\">{}</pre>",
+        "<h1>{}</h1><p class=\"meta\">{}{}</p><pre class=\"content\">{}</pre>{}",
         html_escape(&m.title),
         html_escape(&m.created_at),
         if tags.is_empty() { String::new() } else { format!(" · {}", tags) },
         html_escape(&m.content),
+        gallery,
     );
     page(if m.title.is_empty() { "分享的备忘" } else { &m.title }, body, StatusCode::OK)
+}
+
+/// 公开附件：仅 PUBLIC 备忘的 image/* 附件可读，其余（不存在/非本备忘/非公开/非图片）一律 404
+async fn public_memo_attachment(
+    AxumState(state): AxumState<ApiState>,
+    Path((id, att_id)): Path<(String, i64)>,
+) -> Response {
+    let ok = (|| -> Option<bool> {
+        let m = state.svc.get_memo(&id).ok()?;
+        if m.visibility != "PUBLIC" {
+            return None;
+        }
+        let att = state.svc.list_attachments(&id).ok()?.into_iter().find(|a| a.id == att_id)?;
+        if !att.mime_type.starts_with("image/") {
+            return None;
+        }
+        Some(true)
+    })()
+    .unwrap_or(false);
+    if !ok {
+        return (StatusCode::NOT_FOUND, "not found").into_response();
+    }
+    match state.svc.read_attachment_content(att_id) {
+        Ok(Some((att, bytes))) => (
+            [(header::CONTENT_TYPE, att.mime_type), (header::CACHE_CONTROL, "public, max-age=3600".to_string())],
+            bytes,
+        )
+            .into_response(),
+        _ => (StatusCode::NOT_FOUND, "not found").into_response(),
+    }
 }
 
 /// 最小 HTML 转义（内容与标题都过这层，防注入）

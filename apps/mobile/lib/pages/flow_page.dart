@@ -63,6 +63,9 @@ class FlowPage extends ConsumerWidget {
         // 分类筛选条（有分类才显示）
         const _CategoryBar(),
 
+        // 批量操作选择条（F18：多选模式时显示）
+        if (ref.watch(selectModeProvider)) const _SelectBar(),
+
         Expanded(
           child: memos.loading && memos.items.isEmpty
               ? const Center(child: CircularProgressIndicator(strokeWidth: 2))
@@ -512,11 +515,15 @@ class _TimelineList extends ConsumerWidget {
               child: Column(
                 children: [
                   for (final m in entry.value)
-                    _TlEntry(
-                      memo: m,
-                      color: _parseColor(catColors[m.category]) ?? kPrimary,
-                      onTap: () => _openDetail(context, ref, m),
-                      onLongPress: () => _quickActions(context, ref, m),
+                    _selectable(
+                      ref,
+                      m.shortId,
+                      _TlEntry(
+                        memo: m,
+                        color: _parseColor(catColors[m.category]) ?? kPrimary,
+                        onTap: () => _memoTap(context, ref, m),
+                        onLongPress: () => _memoLongPress(context, ref, m),
+                      ),
                     ),
                 ],
               ),
@@ -696,10 +703,14 @@ class _FlowList extends ConsumerWidget {
               return _FadeSlideIn(
                 keyId: 'p${pinned[idx].shortId}',
                 index: idx,
-                child: MemoCard(
-                  memo: pinned[idx],
-                  onTap: () => _openDetail(context, ref, pinned[idx]),
-                  onLongPress: () => _quickActions(context, ref, pinned[idx]),
+                child: _selectable(
+                  ref,
+                  pinned[idx].shortId,
+                  MemoCard(
+                    memo: pinned[idx],
+                    onTap: () => _memoTap(context, ref, pinned[idx]),
+                    onLongPress: () => _memoLongPress(context, ref, pinned[idx]),
+                  ),
                 ),
               );
             }
@@ -714,10 +725,14 @@ class _FlowList extends ConsumerWidget {
               return _FadeSlideIn(
                 keyId: m.shortId,
                 index: idx,
-                child: MemoCard(
-                  memo: m,
-                  onTap: () => _openDetail(context, ref, m),
-                  onLongPress: () => _quickActions(context, ref, m),
+                child: _selectable(
+                  ref,
+                  m.shortId,
+                  MemoCard(
+                    memo: m,
+                    onTap: () => _memoTap(context, ref, m),
+                    onLongPress: () => _memoLongPress(context, ref, m),
+                  ),
                 ),
               );
             }
@@ -756,6 +771,238 @@ void _openDetail(BuildContext context, WidgetRef ref, Memo m) {
   Navigator.of(context).push(MaterialPageRoute(builder: (_) => DetailPage(memoId: m.shortId)));
 }
 
+/// F18：多选模式下点按=勾选/取消，非多选=原行为
+void _memoTap(BuildContext context, WidgetRef ref, Memo m) {
+  if (ref.read(selectModeProvider)) {
+    ref.read(flowSelectProvider.notifier).toggle(m.shortId);
+  } else {
+    _openDetail(context, ref, m);
+  }
+}
+
+/// 多选模式时给条目叠一枚勾选标（右下角，避开卡片的置顶角标）
+Widget _selectable(WidgetRef ref, String memoId, Widget child) {
+  if (!ref.watch(selectModeProvider)) return child;
+  return Stack(
+    children: [
+      child,
+      Positioned(right: 6, bottom: 6, child: _SelectMark(memoId: memoId)),
+    ],
+  );
+}
+
+void _memoLongPress(BuildContext context, WidgetRef ref, Memo m) {
+  if (ref.read(selectModeProvider)) {
+    ref.read(flowSelectProvider.notifier).toggle(m.shortId);
+  } else {
+    _quickActions(context, ref, m);
+  }
+}
+
+/// F18：多选模式下条目右上角勾选标
+class _SelectMark extends ConsumerWidget {
+  const _SelectMark({required this.memoId});
+
+  final String memoId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final on = ref.watch(flowSelectProvider.select((s) => s.contains(memoId)));
+    return Container(
+      width: 22,
+      height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: on ? kPrimary : Colors.black38,
+        border: Border.all(color: on ? kPrimary : Colors.white24, width: 1.5),
+      ),
+      child: on ? const Icon(Icons.check_rounded, size: 15, color: Colors.white) : null,
+    );
+  }
+}
+
+/// F18：多选模式选择条（计数 + 批操作 + 退出）
+class _SelectBar extends ConsumerWidget {
+  const _SelectBar();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sel = ref.watch(flowSelectProvider);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 4, 16, 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: kPrimary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Text('已选 ${sel.length} 条', style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: fg)),
+          const Spacer(),
+          TextButton(
+            onPressed: () => _batchSheet(context, ref, 'delete'),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(0, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: const Row(children: [Icon(Icons.delete_outline_rounded, size: 15, color: kPrimary), SizedBox(width: 3), Text('删除', style: TextStyle(fontSize: 12, color: kPrimary))]),
+          ),
+          TextButton(
+            onPressed: () => _batchSheet(context, ref, 'category'),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(0, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: const Row(children: [Icon(Icons.category_outlined, size: 15, color: kPrimary), SizedBox(width: 3), Text('分类', style: TextStyle(fontSize: 12, color: kPrimary))]),
+          ),
+          TextButton(
+            onPressed: () => _batchSheet(context, ref, 'tag'),
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(0, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: const Row(children: [Icon(Icons.tag_rounded, size: 15, color: kPrimary), SizedBox(width: 3), Text('标签', style: TextStyle(fontSize: 12, color: kPrimary))]),
+          ),
+          TextButton(
+            onPressed: () {
+              ref.read(flowSelectProvider.notifier).clear();
+              ref.read(selectModeProvider.notifier).state = false;
+            },
+            style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6), minimumSize: const Size(0, 30), tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+            child: const Row(children: [Icon(Icons.close_rounded, size: 15, color: kPrimary), SizedBox(width: 3), Text('退出', style: TextStyle(fontSize: 12, color: kPrimary))]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// F18：批量动作弹层（删除确认 / 分类单选 / 标签输入）→ 逐条 REST + 汇总反馈
+Future<void> _batchSheet(BuildContext context, WidgetRef ref, String kind) async {
+  final sel = ref.read(flowSelectProvider);
+  if (sel.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('还没有勾选任何备忘')));
+    return;
+  }
+  final client = ref.read(connProvider).client;
+  if (client == null) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('离线状态，批量操作需连接桌面端')));
+    return;
+  }
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  final fg = dark ? const Color(0xFFE6E8EE) : const Color(0xFF1F2328);
+
+  Future<(int, int)> run(Future<bool> Function(String id) op) async {
+    var ok = 0;
+    for (final id in sel) {
+      try {
+        if (await op(id)) ok++;
+      } catch (_) {}
+    }
+    return (ok, sel.length);
+  }
+
+  Future<void> finish((int, int) r, String verb) async {
+    ref.read(flowSelectProvider.notifier).clear();
+    ref.read(selectModeProvider.notifier).state = false;
+    await ref.read(memosProvider.notifier).refresh();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$verb ${r.$1}/${r.$2} 条')));
+    }
+  }
+
+  // 删除：确认后执行
+  if (kind == 'delete') {
+    final go = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: dark ? const Color(0xFF232725) : Colors.white,
+        title: Text('删除 ${sel.length} 条备忘？', style: TextStyle(fontSize: 16, color: fg)),
+        content: Text('移入回收站，可在回收站恢复。', style: TextStyle(fontSize: 13, color: fg.withValues(alpha: 0.6))),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除', style: TextStyle(color: Colors.redAccent))),
+        ],
+      ),
+    );
+    if (go != true) return;
+    await finish(await run((id) async {
+      await client.deleteMemo(id);
+      return true;
+    }), '已删除');
+    return;
+  }
+
+  // 分类：单选（含「无分类」）
+  if (kind == 'category') {
+    final cats = await ref.read(categoriesProvider.future);
+    if (!context.mounted) return;
+    final target = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => GlassContainer(
+        tier: GlassTier.thick,
+        preference: ref.read(glassPrefProvider),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 14),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 12, top: 8, bottom: 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('移入分类', style: TextStyle(fontSize: 12, color: fg.withValues(alpha: 0.55))),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.block_rounded, size: 20),
+                title: const Text('无分类', style: TextStyle(fontSize: 14)),
+                onTap: () => Navigator.pop(ctx, ''),
+              ),
+              for (final c in cats)
+                ListTile(
+                  leading: Icon(Icons.label_rounded, size: 20, color: _TimelineList._parseColor(c.color) ?? kPrimary),
+                  title: Text(c.name, style: const TextStyle(fontSize: 14)),
+                  onTap: () => Navigator.pop(ctx, c.name),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (target == null) return;
+    final cat = target.isEmpty ? null : target;
+    await finish(await run((id) async {
+      ref.read(memosProvider.notifier).upsert(await client.updateMemo(id, category: cat));
+      return true;
+    }), '已改分类');
+    return;
+  }
+
+  // 标签：输入追加以空格分隔的标签
+  final controller = TextEditingController();
+  final input = await showDialog<String>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: dark ? const Color(0xFF232725) : Colors.white,
+      title: Text('给 ${sel.length} 条打标签', style: TextStyle(fontSize: 16, color: fg)),
+      content: TextField(
+        controller: controller,
+        autofocus: true,
+        decoration: const InputDecoration(hintText: '标签名（不含 #），多个用空格分隔'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+        TextButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text('确定')),
+      ],
+    ),
+  );
+  if (input == null || input.trim().isEmpty) return;
+  final newTags = input.trim().split(RegExp(r'\s+')).toSet();
+  await finish(await run((id) async {
+    final m = ref.read(memosProvider).items.firstWhere((x) => x.shortId == id);
+    final tags = {...m.tags, ...newTags}.toList();
+    ref.read(memosProvider.notifier).upsert(await client.updateMemo(id, tags: tags));
+    return true;
+  }), '已打标签');
+}
+
 String _dayLabel(Duration diff) {
   if (diff.inDays == 0) return '今天';
   if (diff.inDays == 1) return '昨天';
@@ -792,6 +1039,16 @@ void _quickActions(BuildContext context, WidgetRef ref, Memo m) {
                   style: TextStyle(fontSize: 12, color: (dark ? Colors.white : Colors.black87).withValues(alpha: 0.55)),
                 ),
               ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.checklist_rounded, size: 20),
+              title: const Text('多选', style: TextStyle(fontSize: 14)),
+              subtitle: const Text('批量删除 / 改分类 / 打标签', style: TextStyle(fontSize: 11)),
+              onTap: () {
+                Navigator.pop(ctx);
+                ref.read(flowSelectProvider.notifier).clear();
+                ref.read(selectModeProvider.notifier).state = true;
+              },
             ),
             ListTile(
               leading: Icon(m.pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined, size: 20),
